@@ -2,7 +2,7 @@
 
 Organiza la carpeta Descargas en Windows y Linux: clasifica, mueve y limpia con preview antes de aplicar. La IA (opcional) solo ve nombres de archivo, nunca el contenido.
 
-Licencia: [MIT](LICENSE).
+Licencia: [MIT](LICENSE). Ilustraciones e iconos de terceros: [docs/CREDITOS.md](docs/CREDITOS.md).
 
 ## Para usuarios (Windows)
 

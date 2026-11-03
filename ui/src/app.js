@@ -1,3 +1,18 @@
+import iconFolders from "./icons/folders.svg?raw";
+import iconTrashSvg from "./icons/trash-2.svg?raw";
+import iconLayers from "./icons/layers.svg?raw";
+import iconSearch from "./icons/search.svg?raw";
+import iconFiles from "./icons/files.svg?raw";
+import iconCalendar from "./icons/calendar.svg?raw";
+import iconWord from "./icons/whole-word.svg?raw";
+import iconFileSearch from "./icons/file-search.svg?raw";
+import iconTags from "./icons/tags.svg?raw";
+import iconCopy from "./icons/copy.svg?raw";
+import iconKanban from "./icons/folder-kanban.svg?raw";
+import iconSliders from "./icons/sliders-horizontal.svg?raw";
+import iconChevronSvg from "./icons/chevron-down.svg?raw";
+import iconFolderSvg from "./icons/folder.svg?raw";
+
 const LOADING_MS = 1200;
 
 const ORG_METHODS = [
@@ -6,48 +21,56 @@ const ORG_METHODS = [
     title: "Por extensión",
     description: "Clasifica según el tipo de archivo (.pdf, .jpg, .docx, .zip…).",
     enabled: true,
+    icon: iconFiles,
   },
   {
     id: "date",
     title: "Por fecha",
-    description: "Crea carpetas por año, mes o día.",
-    enabled: false,
+    description: "Crea carpetas por año, mes o día según la fecha de modificación.",
+    enabled: true,
+    icon: iconCalendar,
   },
   {
     id: "name",
     title: "Por nombre",
-    description: "Busca palabras en el nombre del archivo.",
-    enabled: false,
+    description: "Agrupa por palabras del nombre. Si indicas varias, usa la más larga.",
+    enabled: true,
+    icon: iconWord,
   },
   {
     id: "content",
     title: "Por contenido",
     description: "Abre el archivo y analiza su contenido.",
     enabled: false,
+    icon: iconFileSearch,
   },
   {
     id: "tags",
     title: "Por etiquetas",
-    description: "No mueve archivos; los categoriza con etiquetas.",
-    enabled: false,
+    description: "No mueve archivos; guarda una etiqueta según el tipo.",
+    enabled: true,
+    icon: iconTags,
   },
   {
     id: "duplicates",
     title: "Por duplicados",
-    description: "Detecta y elimina archivos repetidos.",
-    enabled: false,
+    description: "Conserva la copia más antigua y mueve el resto a Duplicados.",
+    enabled: true,
+    icon: iconCopy,
   },
   {
     id: "projects",
     title: "Por proyectos",
-    description: "Agrupa archivos relacionados.",
-    enabled: false,
+    description: "Agrupa los archivos cuyo nombre contiene el nombre del proyecto.",
+    enabled: true,
+    icon: iconKanban,
   },
   {
     id: "rules",
     title: "Por reglas personalizadas",
     description: "Si ocurre X, haz Y.",
     enabled: false,
+    icon: iconSliders,
   },
 ];
 
@@ -84,16 +107,19 @@ function waitForApi(timeoutMs = 8000) {
   });
 }
 
-function iconFolder() {
-  return `<svg class="h-5 w-5 shrink-0 text-stone-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.379a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 12.121 8H19.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-10Z"/></svg>`;
+function svgIcon(svg, className = "") {
+  const tagged = svg.includes("aria-hidden")
+    ? svg
+    : svg.replace("<svg", '<svg aria-hidden="true" focusable="false"');
+  return `<span class="taxos-icon ${className}">${tagged}</span>`;
 }
 
-function iconTrash() {
-  return `<svg class="h-5 w-5 shrink-0 text-stone-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673A2.25 2.25 0 0 1 15.916 21.75H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>`;
-}
-
-function iconChevron(open) {
-  return `<svg class="h-4 w-4 shrink-0 text-stone-400 transition ${open ? "rotate-180" : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>`;
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 export function createApp(root) {
@@ -113,6 +139,8 @@ export function createApp(root) {
     busy: false,
     error: "",
     api: null,
+    canUndo: false,
+    undoPreview: { lines: [], move_count: 0, conflict_count: 0, tags: false },
   };
 
   function applyTheme(_mode) {
@@ -142,18 +170,11 @@ export function createApp(root) {
     render({ animate: true });
   }
 
-  function backToOperations() {
-    state.history = [];
-    state.expandedGroup = null;
-    state.orgMethod = null;
-    go("choose_op", { push: false });
-  }
-
   async function withApi(fn) {
     if (!state.api) {
       state.error = "API no lista.";
       render();
-      return;
+      return null;
     }
     state.busy = true;
     state.error = "";
@@ -167,6 +188,16 @@ export function createApp(root) {
     } finally {
       state.busy = false;
       render();
+    }
+  }
+
+  async function refreshUndo() {
+    if (!state.api) return;
+    try {
+      const status = await state.api.undo_status();
+      state.canUndo = Boolean(status?.available);
+    } catch {
+      state.canUndo = false;
     }
   }
 
@@ -198,17 +229,18 @@ export function createApp(root) {
     `;
   }
 
-  function heroSlide({ title, imageSrc, subtitle, footerHtml }) {
+  function heroSlide({ title, imageSrc, imageAlt = "", subtitle, footerHtml, extraHtml = "" }) {
     return `
       <div class="flex min-h-screen w-full flex-col bg-white">
         <div class="px-6 pt-10 text-center sm:px-10 sm:pt-12">
           <h2 class="font-display text-3xl font-medium tracking-tight text-stone-900 sm:text-4xl">${title}</h2>
         </div>
         <div class="flex flex-1 items-center justify-center px-6 py-4">
-          <img src="${imageSrc}" alt="" class="taxos-hero-img drop-shadow-sm" onerror="this.style.display='none'" />
+          <img src="${imageSrc}" alt="${escapeHtml(imageAlt)}" class="taxos-hero-img drop-shadow-sm" onerror="this.style.display='none'" />
         </div>
         <div class="px-6 pb-4 text-center sm:px-10">
           <p class="mx-auto max-w-lg text-sm font-light leading-relaxed text-stone-700 sm:text-base">${subtitle}</p>
+          ${extraHtml}
         </div>
         ${
           footerHtml
@@ -231,31 +263,35 @@ export function createApp(root) {
     `;
   }
 
+  function groupIcon(kind) {
+    if (kind === "trash") return svgIcon(iconTrashSvg, "text-stone-500");
+    if (kind === "tag") return svgIcon(iconTags, "text-stone-500");
+    return svgIcon(iconFolderSvg, "text-stone-500");
+  }
+
   function renderSlide() {
     const id = state.slideId;
 
     if (id === "loading") {
-      return shell(
-        `
-        <div class="flex flex-1 flex-col items-center justify-center py-10 text-center">
-          <img src="./splash.png" alt="" class="mb-6 h-24 w-auto opacity-90" onerror="this.style.display='none'" />
-          <h2 class="font-display text-2xl font-medium text-stone-900">Iniciando Taxos…</h2>
-          <p class="mt-2 text-sm font-light text-stone-500">Preparando el asistente.</p>
-          <div class="mt-10 h-px w-48 overflow-hidden bg-stone-300/80">
+      return heroSlide({
+        title: "Iniciando Taxos…",
+        imageSrc: "./illustrations/filing-system.svg",
+        imageAlt: "Ilustración de una persona archivando documentos",
+        subtitle: "Preparando el asistente para ordenar tus archivos.",
+        extraHtml: `
+          <div class="mx-auto mt-8 h-px w-48 overflow-hidden bg-stone-300/80" role="progressbar" aria-valuetext="Cargando">
             <div class="taxos-progress-bar h-full w-1/3 bg-stone-800"></div>
           </div>
-        </div>
         `,
-        "",
-        { bare: true }
-      );
+      });
     }
 
     if (id === "welcome") {
       return heroSlide({
         title: "Bienvenido/a",
-        imageSrc: "./InicioPortada.svg",
-        subtitle: "Organiza y Limpia de Archivos Basura",
+        imageSrc: "./illustrations/welcome.svg",
+        imageAlt: "Ilustración de bienvenida",
+        subtitle: "Organiza y limpia archivos basura de tu carpeta de descargas.",
         footerHtml: `
           <div class="ml-auto"></div>
           <button type="button" data-go="objetivo" class="${btn("", { primary: true })}">Comenzar</button>
@@ -266,7 +302,8 @@ export function createApp(root) {
     if (id === "objetivo") {
       return heroSlide({
         title: "Objetivo",
-        imageSrc: "./InicioPortada.svg",
+        imageSrc: "./illustrations/goal.svg",
+        imageAlt: "Ilustración de una meta",
         subtitle:
           "Puedes organizar archivos por categoría, eliminar basura segura (tmp, vacíos, locks) o ambas cosas. Elige si quieres un tutorial breve.",
         footerHtml: `
@@ -282,9 +319,10 @@ export function createApp(root) {
     if (id === "tut_organize") {
       return heroSlide({
         title: "Organizar",
-        imageSrc: "./ExtensionDeArchivos.svg",
+        imageSrc: "./illustrations/organizing-projects.svg",
+        imageAlt: "Ilustración de archivos agrupados en carpetas",
         subtitle:
-          "Mueve archivos de la raíz de Descargas a subcarpetas según su tipo (imágenes, documentos, instaladores, etc.).",
+          "Mueve archivos de la raíz de Descargas a subcarpetas: por tipo, fecha, nombre, proyecto, duplicados o etiquetas.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
           <div class="ml-auto"></div>
@@ -296,7 +334,8 @@ export function createApp(root) {
     if (id === "tut_clean") {
       return heroSlide({
         title: "Eliminar basura",
-        imageSrc: "./ExtensionDeArchivos.svg",
+        imageSrc: "./illustrations/inbox-cleanup.svg",
+        imageAlt: "Ilustración de una bandeja que se limpia",
         subtitle:
           "Envía a la papelera archivos temporales, vacíos o locks de forma segura. No borra de forma permanente.",
         footerHtml: `
@@ -310,7 +349,8 @@ export function createApp(root) {
     if (id === "tut_both") {
       return heroSlide({
         title: "Organizar y eliminar",
-        imageSrc: "./ExtensionDeArchivos.svg",
+        imageSrc: "./illustrations/completed-tasks.svg",
+        imageAlt: "Ilustración de tareas terminadas",
         subtitle:
           "También puedes combinar ambas acciones en una sola pasada. Siempre verás un preview antes de confirmar.",
         footerHtml: `
@@ -323,20 +363,37 @@ export function createApp(root) {
 
     if (id === "choose_op") {
       const cell =
-        "flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg border border-stone-300/60 bg-white px-3 py-4 text-sm font-medium tracking-wide text-stone-800 transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-400/30";
+        "flex min-h-[6.5rem] flex-col items-center justify-center gap-2 rounded-lg border border-stone-300/60 bg-white px-3 py-4 text-sm font-medium tracking-wide text-stone-800 transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-400/30";
       const cellMuted =
-        "flex min-h-[5.5rem] cursor-not-allowed flex-col items-center justify-center rounded-lg border border-stone-200/80 bg-stone-100/50 px-3 py-4 text-sm font-medium tracking-wide text-stone-400";
+        "flex min-h-[6.5rem] cursor-not-allowed flex-col items-center justify-center gap-1 rounded-lg border border-stone-200/80 bg-stone-100/50 px-3 py-4 text-sm font-medium tracking-wide text-stone-400";
+      const option = (op, label, icon) => `
+        <button type="button" data-op="${op}" class="${cell}">
+          ${svgIcon(icon, "text-stone-600")}
+          <span>${label}</span>
+        </button>`;
       return shell(
         `
         ${titleBlock("Elegir operación", "¿Qué quieres hacer en esta pasada?")}
         <div class="mt-8 grid grid-cols-2 gap-3">
-          <button type="button" data-op="organize" class="${cell}">Organizar</button>
-          <button type="button" data-op="clean" class="${cell}">Eliminar</button>
-          <button type="button" data-op="both" class="${cell}">Ambos</button>
-          <button type="button" disabled class="${cellMuted}" title="Próximamente">Buscar</button>
+          ${option("organize", "Organizar", iconFolders)}
+          ${option("clean", "Eliminar", iconTrashSvg)}
+          ${option("both", "Ambos", iconLayers)}
+          <button type="button" disabled class="${cellMuted}" title="Próximamente">
+            ${svgIcon(iconSearch, "text-stone-300")}
+            <span>Buscar</span>
+            <span class="text-[10px] font-light uppercase tracking-wider">Próximamente</span>
+          </button>
         </div>
         `,
-        `<button type="button" data-action="back" class="${btn("")}">Atrás</button>`
+        `
+        <button type="button" data-action="back" class="${btn("")}">Atrás</button>
+        <div class="ml-auto"></div>
+        ${
+          state.canUndo
+            ? `<button type="button" data-action="undo" class="${btn("")}">Deshacer última organización</button>`
+            : ""
+        }
+        `
       );
     }
 
@@ -359,21 +416,28 @@ export function createApp(root) {
 
     if (id === "org_method") {
       const cellOn =
-        "flex min-h-[7rem] flex-col items-start justify-center rounded-lg border border-stone-300/70 bg-white px-4 py-4 text-left transition hover:border-stone-500 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-400/30";
+        "flex min-h-[7.5rem] flex-col items-start justify-center rounded-lg border border-stone-300/70 bg-white px-4 py-4 text-left transition hover:border-stone-500 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-400/30";
       const cellOff =
-        "flex min-h-[7rem] cursor-not-allowed flex-col items-start justify-center rounded-lg border border-stone-200/80 bg-stone-50/80 px-4 py-4 text-left opacity-60";
+        "flex min-h-[7.5rem] cursor-not-allowed flex-col items-start justify-center rounded-lg border border-stone-200/80 bg-stone-50/80 px-4 py-4 text-left opacity-70";
       const cards = ORG_METHODS.map((m) => {
         if (m.enabled) {
           return `
             <button type="button" data-org-method="${m.id}" class="${cellOn}">
-              <span class="font-display text-lg font-medium text-stone-900">${m.title}</span>
+              <span class="flex items-center gap-2">
+                ${svgIcon(m.icon, "text-stone-700")}
+                <span class="font-display text-lg font-medium text-stone-900">${m.title}</span>
+              </span>
               <span class="mt-2 text-xs font-light leading-relaxed text-stone-500">${m.description}</span>
             </button>`;
         }
         return `
           <button type="button" disabled class="${cellOff}" title="Próximamente">
-            <span class="font-display text-lg font-medium text-stone-400">${m.title}</span>
+            <span class="flex items-center gap-2">
+              ${svgIcon(m.icon, "text-stone-400")}
+              <span class="font-display text-lg font-medium text-stone-400">${m.title}</span>
+            </span>
             <span class="mt-2 text-xs font-light leading-relaxed text-stone-400">${m.description}</span>
+            <span class="mt-2 text-[10px] font-medium uppercase tracking-wider text-stone-400">Próximamente</span>
           </button>`;
       }).join("");
 
@@ -383,6 +447,47 @@ export function createApp(root) {
         <div class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">${cards}</div>
         `,
         `<button type="button" data-action="back" class="${btn("")}">Atrás</button>`
+      );
+    }
+
+    if (id === "org_config") {
+      if (state.orgMethod === "date") {
+        const choice =
+          "flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg border border-stone-300/70 bg-white px-4 py-4 text-sm font-medium text-stone-800 transition hover:border-stone-500 hover:bg-stone-50";
+        return shell(
+          `
+          ${titleBlock("Por fecha", "Las carpetas usan la fecha de modificación del archivo.")}
+          <div class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <button type="button" data-granularity="year" class="${choice}">Por año</button>
+            <button type="button" data-granularity="month" class="${choice}">Por mes</button>
+            <button type="button" data-granularity="day" class="${choice}">Por día</button>
+          </div>
+          `,
+          `<button type="button" data-action="back" class="${btn("")}">Atrás</button>`
+        );
+      }
+
+      const projects = state.orgMethod === "projects";
+      return shell(
+        `
+        ${titleBlock(
+          projects ? "Nombres de proyecto" : "Palabras del nombre",
+          projects
+            ? "Escribe uno o más nombres separados por comas. Si el nombre del archivo contiene esa palabra, sin distinguir mayúsculas, va a una carpeta con ese nombre. Si coinciden varias, se usa la más larga."
+            : "Opcional. Si escribes palabras, cada archivo va a la carpeta de la coincidencia más larga. Si lo dejas vacío, se usa la primera palabra del nombre."
+        )}
+        <label class="mt-8 block text-xs font-medium uppercase tracking-wider text-stone-500" for="org-terms">
+          ${projects ? "Proyectos" : "Palabras"}
+        </label>
+        <input id="org-terms" type="text" autocomplete="off"
+          placeholder="${projects ? "Taxos, Informe" : "factura, contrato"}"
+          class="mt-2 w-full border-0 border-b border-stone-300 bg-transparent py-3 text-sm font-light text-stone-800 outline-none focus:border-stone-800" />
+        `,
+        `
+        <button type="button" data-action="back" class="${btn("")}">Atrás</button>
+        <div class="ml-auto"></div>
+        <button type="button" data-action="org-config-next" class="${btn("", { primary: true })}">Ver preview</button>
+        `
       );
     }
 
@@ -411,16 +516,20 @@ export function createApp(root) {
                       }
                     </ul>`
                   : "";
+                const detail =
+                  g.kind === "tag"
+                    ? `${g.count} archivo${g.count === 1 ? "" : "s"} · etiqueta · ${escapeHtml(g.size_label || "")}`
+                    : `${g.count} archivo${g.count === 1 ? "" : "s"} · ${escapeHtml(g.size_label || "")}`;
                 return `
               <li>
                 <button type="button" data-expand="${escapeHtml(g.name)}"
                   class="flex w-full items-center gap-3 py-3.5 text-left transition hover:bg-stone-50/80 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300/50">
-                  ${g.kind === "trash" ? iconTrash() : iconFolder()}
+                  ${groupIcon(g.kind)}
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-sm font-medium text-stone-900">${escapeHtml(g.name)}</p>
-                    <p class="mt-0.5 text-xs font-light text-stone-500">${g.count} archivo${g.count === 1 ? "" : "s"} · ${escapeHtml(g.size_label || "")}</p>
+                    <p class="mt-0.5 text-xs font-light text-stone-500">${detail}</p>
                   </div>
-                  ${iconChevron(open)}
+                  ${svgIcon(iconChevronSvg, `text-stone-400 transition ${open ? "rotate-180" : ""}`)}
                 </button>
                 ${filesHtml}
               </li>`;
@@ -443,10 +552,12 @@ export function createApp(root) {
     }
 
     if (id === "confirm") {
+      const tagged = state.preview.tagCount || 0;
+      const extra = tagged ? ` Se etiquetarán ${tagged} archivo(s), sin moverlos.` : "";
       return shell(
         titleBlock(
           "Confirmación",
-          `Se van a mover ${state.preview.moveCount} archivo(s) y enviar ${state.preview.trashCount} a la papelera. ¿Confirmas aplicar el plan?`
+          `Se van a mover ${state.preview.moveCount} archivo(s) y enviar ${state.preview.trashCount} a la papelera.${extra} ¿Confirmas aplicar el plan?`
         ),
         `
         <button type="button" data-action="confirm-no" class="${btn("")}">No</button>
@@ -456,13 +567,52 @@ export function createApp(root) {
       );
     }
 
+    if (id === "undo_confirm") {
+      const preview = state.undoPreview || {};
+      const lines = preview.lines || [];
+      const list = lines.length
+        ? `<ul class="mt-6 max-h-48 space-y-1 overflow-y-auto border-y border-stone-300/50 py-3 text-sm font-light text-stone-600">
+            ${lines.map((line) => `<li class="truncate">${escapeHtml(line)}</li>`).join("")}
+          </ul>`
+        : "";
+      const conflicts = preview.conflict_count || 0;
+      const conflict = conflicts
+        ? `<p class="mt-3 text-sm font-light text-stone-600">Hay ${conflicts} ${
+            conflicts === 1
+              ? "archivo cuya ruta original está ocupada: se restaura con otro nombre."
+              : "archivos cuya ruta original está ocupada: se restauran con otro nombre."
+          }</p>`
+        : "";
+      return shell(
+        `
+        ${titleBlock(
+          "Deshacer",
+          "Cada archivo vuelve a su ruta original. Las carpetas que creó Taxos y queden vacías se eliminan."
+        )}
+        ${conflict}
+        ${list}
+        `,
+        `
+        <button type="button" data-action="back" class="${btn("")}">Atrás</button>
+        <div class="ml-auto"></div>
+        <button type="button" data-action="undo-apply" class="${btn("", { primary: true })}" ${state.busy ? "disabled" : ""}>Deshacer</button>
+        `
+      );
+    }
+
     if (id === "done") {
       return shell(
         titleBlock("Listo", state.resultMessage),
         `
         <button type="button" data-action="close" class="${btn("")}">Cerrar</button>
-        <div class="ml-auto"></div>
-        <button type="button" data-action="again" class="${btn("", { primary: true })}">Realizar otra operación</button>
+        <div class="ml-auto flex flex-wrap gap-2">
+          ${
+            state.canUndo
+              ? `<button type="button" data-action="undo" class="${btn("")}">Deshacer</button>`
+              : ""
+          }
+          <button type="button" data-action="again" class="${btn("", { primary: true })}">Realizar otra operación</button>
+        </div>
         `
       );
     }
@@ -470,18 +620,12 @@ export function createApp(root) {
     return shell(`<p class="text-sm text-stone-600">Slide desconocido.</p>`, "");
   }
 
-  function escapeHtml(text) {
-    return String(text)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
-  }
-
   function bind() {
     root.querySelectorAll("[data-go]").forEach((el) => {
-      el.addEventListener("click", () => {
-        go(el.getAttribute("data-go"));
+      el.addEventListener("click", async () => {
+        const dest = el.getAttribute("data-go");
+        if (dest === "choose_op") await refreshUndo();
+        go(dest);
       });
     });
 
@@ -504,10 +648,23 @@ export function createApp(root) {
         const method = el.getAttribute("data-org-method");
         state.orgMethod = method;
         state.useAi = false;
-        await withApi((api) => api.set_use_ai(false));
-        await loadPreview();
-        go("preview");
+        if (method === "date" || method === "name" || method === "projects") {
+          go("org_config");
+          return;
+        }
+        await prepareAndPreview(method, "month", "");
       });
+    });
+
+    root.querySelectorAll("[data-granularity]").forEach((el) => {
+      el.addEventListener("click", async () => {
+        await prepareAndPreview("date", el.getAttribute("data-granularity") || "month", "");
+      });
+    });
+
+    root.querySelector('[data-action="org-config-next"]')?.addEventListener("click", async () => {
+      const terms = root.querySelector("#org-terms")?.value || "";
+      await prepareAndPreview(state.orgMethod, "month", terms);
     });
 
     root.querySelectorAll("[data-op]").forEach((el) => {
@@ -550,8 +707,8 @@ export function createApp(root) {
       if (state.doOrganize) {
         go("org_method");
       } else {
-        await loadPreview();
-        go("preview");
+        const ready = await loadPreview();
+        if (ready) go("preview");
       }
     });
 
@@ -564,6 +721,23 @@ export function createApp(root) {
         return;
       }
       state.resultMessage = res.message || "Operación terminada.";
+      state.canUndo = Boolean(res.can_undo);
+      go("done");
+    });
+
+    root.querySelector('[data-action="undo"]')?.addEventListener("click", () => {
+      openUndo();
+    });
+
+    root.querySelector('[data-action="undo-apply"]')?.addEventListener("click", async () => {
+      const res = await withApi((api) => api.apply_undo());
+      if (!res || res.ok === false) {
+        state.error = (res && res.error) || "No se pudo deshacer.";
+        render({ animate: false });
+        return;
+      }
+      state.resultMessage = res.message || "Organización deshecha.";
+      state.canUndo = false;
       go("done");
     });
 
@@ -575,24 +749,57 @@ export function createApp(root) {
       await withApi((api) => api.reset_operation());
       state.useAi = false;
       state.orgMethod = null;
-      state.preview = { moveCount: 0, trashCount: 0, groups: [], lines: [] };
+      state.preview = { moveCount: 0, trashCount: 0, tagCount: 0, groups: [], lines: [] };
       state.expandedGroup = null;
       state.history = [];
+      await refreshUndo();
       go("choose_op", { push: false });
     });
   }
 
+  async function prepareAndPreview(method, granularity, terms) {
+    const res = await withApi((api) => api.set_organize_options(method, granularity, terms));
+    if (!res || res.ok === false) {
+      state.error = (res && res.error) || "No se pudo preparar el modo.";
+      render({ animate: false });
+      return;
+    }
+    state.useAi = false;
+    await withApi((api) => api.set_use_ai(false));
+    const ready = await loadPreview();
+    if (ready) go("preview");
+  }
+
+  async function openUndo() {
+    const res = await withApi((api) => api.undo_preview());
+    if (!res || res.available === false) {
+      state.error = "No hay una organización para deshacer.";
+      state.canUndo = false;
+      render({ animate: false });
+      return;
+    }
+    state.undoPreview = res;
+    state.canUndo = true;
+    go("undo_confirm");
+  }
+
   async function loadPreview() {
     const res = await withApi((api) => api.build_preview());
-    if (res) {
-      state.preview = {
-        moveCount: res.move_count ?? 0,
-        trashCount: res.trash_count ?? 0,
-        groups: res.groups || [],
-        lines: res.lines || [],
-      };
-      state.expandedGroup = null;
+    if (!res) return false;
+    if (res.error) {
+      state.error = res.error;
+      render({ animate: false });
+      return false;
     }
+    state.preview = {
+      moveCount: res.move_count ?? 0,
+      trashCount: res.trash_count ?? 0,
+      tagCount: res.tag_count ?? 0,
+      groups: res.groups || [],
+      lines: res.lines || [],
+    };
+    state.expandedGroup = null;
+    return true;
   }
 
   function render({ animate = false } = {}) {
@@ -622,6 +829,7 @@ export function createApp(root) {
       state.hasGroqKey = Boolean(s.has_groq_key);
       applyTheme("Light");
       await state.api.set_theme("Light");
+      await refreshUndo();
       render();
     } catch (err) {
       state.error = String(err.message || err);
