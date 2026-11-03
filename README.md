@@ -9,11 +9,12 @@ Licencia: [MIT](LICENSE).
 No necesitas instalar Python.
 
 1. Ve a **Releases** en este repositorio.
-2. Descarga `Taxos.exe` (Win64).
-3. Doble clic → se abre el asistente gráfico.
+2. Descarga `Taxos-win64.zip`.
+3. Descomprime la carpeta.
+4. Doble clic en `Taxos.exe` (verás una pantalla de carga breve y luego el asistente).
 
 Si Windows SmartScreen avisa: *Más información* → *Ejecutar de todas formas*.  
-No empaquetes `.env` en el `.exe`. Sin clave, la IA del wizard no se usa (reglas locales).
+No hace falta (ni debes) meter un `.env` en esa carpeta para uso básico. Sin clave de IA se usan solo reglas locales.
 
 ## Para desarrolladores
 
@@ -41,11 +42,12 @@ taxos gui
 
 ### Generar ejecutables
 
-**Windows 64-bit** (en un PC Windows; abre el wizard al doble clic):
+**Windows 64-bit** (en un PC Windows; carpeta + splash, arranque más rápido que onefile):
 
 ```powershell
 .\scripts\build_windows.ps1
-# → dist\Taxos.exe  → súbelo a GitHub Releases
+# → dist\Taxos\Taxos.exe
+# → dist\Taxos-win64.zip  → súbelo a GitHub Releases
 ```
 
 **Linux** (CLI one-file):
@@ -68,7 +70,7 @@ git branch -M main
 git push -u origin main
 ```
 
-Luego, en Windows: genera `Taxos.exe` y súbelo en **Releases**.
+Luego, en Windows: `.\scripts\build_windows.ps1` y sube `dist\Taxos-win64.zip` en **Releases**.
 
 ## Guía
 
