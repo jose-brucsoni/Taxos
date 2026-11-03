@@ -28,9 +28,9 @@ Núcleo CLI primero; luego wizard GUI; IA opcional; al final instalable.
 
 ## Fase 4 — GUI wizard
 
-- [ ] CustomTkinter: preguntas (cómo organizar / qué conservar)
-- [ ] Preview del plan
-- [ ] Confirmar y aplicar (usa el núcleo)
+- [x] CustomTkinter: preguntas (cómo organizar / qué conservar)
+- [x] Preview del plan
+- [x] Confirmar y aplicar (usa el núcleo)
 
 ## Fase 5 — IA opcional
 

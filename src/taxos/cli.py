@@ -263,5 +263,30 @@ def undo(
     console.print(f"[bold]Log:[/bold] {log_path}")
 
 
+@app.command("gui")
+def gui() -> None:
+    """Abre el wizard gráfico (CustomTkinter)."""
+    try:
+        from taxos.gui import run_wizard
+    except ImportError as exc:
+        console.print(
+            "[red]Falta CustomTkinter.[/red] Ejecuta: pip install -e ."
+        )
+        raise typer.Exit(code=1) from exc
+
+    try:
+        run_wizard()
+    except ImportError as exc:
+        console.print(
+            "[red]No se pudo cargar Tkinter/CustomTkinter.[/red] "
+            "En Arch/Linux instala el paquete tk (libtk) e intenta de nuevo."
+        )
+        console.print(f"[dim]{exc}[/dim]")
+        raise typer.Exit(code=1) from exc
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
 if __name__ == "__main__":
     app()

@@ -5,7 +5,7 @@ Organiza la carpeta Descargas en Windows y Linux: clasifica, mueve y limpia con 
 ## Stack
 
 - Python 3.11+, Typer, Rich, pathlib, platformdirs, send2trash, YAML
-- GUI: CustomTkinter (fase 4) · IA nombres: Groq u similar (fase 5)
+- GUI: CustomTkinter · IA nombres: Groq u similar (fase 5)
 
 ## Privacidad
 
@@ -25,6 +25,7 @@ taxos clean                 # dry-run papelera
 taxos clean --apply
 taxos undo                  # dry-run último lote
 taxos undo --apply
+taxos gui                   # wizard gráfico
 ```
 
 ## Guía
