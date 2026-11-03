@@ -18,6 +18,7 @@ if (-not (Test-Path $Python)) { $Python = "python" }
   --paths src `
   --collect-data taxos `
   --collect-all customtkinter `
+  --add-data "assets/splash.png;assets" `
   --hidden-import taxos.gui.wizard `
   src/taxos/run_gui.py
 
