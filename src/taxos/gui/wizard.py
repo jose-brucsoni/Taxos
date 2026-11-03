@@ -7,13 +7,17 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from taxos.classifier import classify_all
+from dotenv import load_dotenv
+
+from taxos.classifier import classify_with_optional_ai
 from taxos.cleaner import TrashCandidate, apply_trash, find_candidates
 from taxos.config import load_rules
 from taxos.history import append_moves, append_trash
 from taxos.organizer import MoveAction, apply_plan, build_plan
 from taxos.paths import get_downloads_dir
 from taxos.scanner import scan_dir
+
+load_dotenv()
 
 
 class TaxosWizard(ctk.CTk):
@@ -26,6 +30,7 @@ class TaxosWizard(ctk.CTk):
         self.target = get_downloads_dir()
         self.do_organize = ctk.BooleanVar(value=True)
         self.do_clean = ctk.BooleanVar(value=False)
+        self.use_ai = ctk.BooleanVar(value=False)
         self.step = 0
         self.move_actions: list[MoveAction] = []
         self.trash_candidates: list[TrashCandidate] = []
@@ -108,6 +113,11 @@ class TaxosWizard(ctk.CTk):
             text="Limpiar basura segura (tmp, vacíos, locks → papelera)",
             variable=self.do_clean,
         ).pack(anchor="w", pady=6)
+        ctk.CTkCheckBox(
+            self.container,
+            text="Usar IA (solo nombres de archivo; requiere GROQ_API_KEY)",
+            variable=self.use_ai,
+        ).pack(anchor="w", pady=6)
         ctk.CTkLabel(
             self.container,
             text="En el siguiente paso verás un preview antes de aplicar.",
@@ -122,7 +132,9 @@ class TaxosWizard(ctk.CTk):
         if self.do_organize.get():
             rules = load_rules()
             entries = scan_dir(self.target)
-            classified = classify_all(entries, rules)
+            classified, _note = classify_with_optional_ai(
+                entries, rules, use_ai=self.use_ai.get()
+            )
             self.move_actions = build_plan(self.target, classified)
         if self.do_clean.get():
             self.trash_candidates = find_candidates(self.target)

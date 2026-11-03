@@ -3,10 +3,11 @@
 from pathlib import Path
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from taxos.classifier import classify_all
+from taxos.classifier import classify_with_optional_ai
 from taxos.cleaner import apply_trash, find_candidates
 from taxos.config import load_rules
 from taxos.history import append_moves, append_trash, append_undos, last_move_batch
@@ -14,6 +15,8 @@ from taxos.organizer import apply_plan, build_plan
 from taxos.paths import get_downloads_dir
 from taxos.scanner import scan_dir
 from taxos.undo import apply_undo, build_undo_plan
+
+load_dotenv()
 
 app = typer.Typer(help="Organiza la carpeta Descargas.", no_args_is_help=True)
 console = Console()
@@ -57,6 +60,11 @@ def scan(
         readable=True,
         resolve_path=True,
     ),
+    use_ai: bool = typer.Option(
+        False,
+        "--ai",
+        help="Clasificar con IA (solo nombres; requiere GROQ_API_KEY).",
+    ),
 ) -> None:
     """Resume archivos de la raíz por categoría."""
     target = path or get_downloads_dir()
@@ -66,7 +74,9 @@ def scan(
 
     rules = load_rules()
     entries = scan_dir(target)
-    classified = classify_all(entries, rules)
+    classified, ai_note = classify_with_optional_ai(entries, rules, use_ai=use_ai)
+    if ai_note:
+        console.print(f"[dim]{ai_note}[/dim]")
 
     totals: dict[str, list[int]] = {}
     for entry, category in classified:
@@ -119,6 +129,11 @@ def organize(
         "--apply",
         help="Aplicar movimientos (por defecto solo dry-run).",
     ),
+    use_ai: bool = typer.Option(
+        False,
+        "--ai",
+        help="Clasificar con IA (solo nombres; requiere GROQ_API_KEY).",
+    ),
 ) -> None:
     """Mueve archivos de la raíz a subcarpetas por categoría."""
     target = path or get_downloads_dir()
@@ -128,7 +143,9 @@ def organize(
 
     rules = load_rules()
     entries = scan_dir(target)
-    classified = classify_all(entries, rules)
+    classified, ai_note = classify_with_optional_ai(entries, rules, use_ai=use_ai)
+    if ai_note:
+        console.print(f"[dim]{ai_note}[/dim]")
     actions = build_plan(target, classified)
 
     mode = "[green]APPLY[/green]" if apply else "[yellow]DRY-RUN[/yellow]"

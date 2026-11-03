@@ -34,9 +34,9 @@ Núcleo CLI primero; luego wizard GUI; IA opcional; al final instalable.
 
 ## Fase 5 — IA opcional
 
-- [ ] Opt-in; solo nombres de archivo (Groq u similar)
-- [ ] Sugerir carpetas / agrupar por significado
-- [ ] Sin IA = reglas locales offline
+- [x] Opt-in; solo nombres de archivo (Groq)
+- [x] Sugerir carpetas / agrupar por significado
+- [x] Sin IA = reglas locales offline
 
 ## Fase 6 — Distribución
 

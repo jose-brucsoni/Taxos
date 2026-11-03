@@ -12,6 +12,7 @@ build/
 # Entorno y secretos
 .env
 .env.*
+!.env.example
 
 # Local Taxos
 history.jsonl
