@@ -1,0 +1,19 @@
+---
+description: Principios de producto y seguridad de Taxos
+alwaysApply: true
+---
+
+# Taxos — núcleo
+
+Organiza Descargas en Windows y Linux. Núcleo CLI primero; GUI e IA según el roadmap.
+
+## Reglas
+
+- Seguir [docs/ROADMAP.md](docs/ROADMAP.md); no saltar fases sin pedirlo.
+- Fases 0–3: librería + CLI (scan, organize, clean, undo).
+- Fase 4: GUI wizard (CustomTkinter), no antes.
+- Fase 5: IA opt-in, solo nombres de archivo; offline con reglas locales siempre.
+- Preferir dry-run / plan antes de mover o borrar.
+- Solo operar dentro de Descargas (o ruta explícita del usuario).
+- Borrar con `send2trash`, nunca `unlink` irreversible por defecto.
+- Docs y mensajes de usuario en español, breves.

@@ -1,0 +1,24 @@
+---
+description: Convenciones Python del stack Taxos
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python — Taxos
+
+## Stack
+
+Typer, Rich, pathlib, shutil, platformdirs, send2trash, YAML.
+
+## Estructura
+
+- Código en `src/taxos/`.
+- Módulos claros: `cli`, `scanner`, `classifier`, `organizer`, `cleaner`, `paths`, `config`.
+
+## Estilo
+
+- Python 3.11+.
+- Tipado en firmas públicas.
+- `pathlib.Path` frente a `os.path`.
+- Config en YAML; no hardcodear categorías si van en config.
+- Sin dependencias nuevas sin justificación.

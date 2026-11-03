@@ -1,0 +1,19 @@
+---
+description: UX de la CLI Taxos
+globs: "**/cli.py"
+alwaysApply: false
+---
+
+# CLI — Taxos
+
+## Comandos
+
+- `scan`, `organize`, `clean` (y luego `watch`).
+- Flag `--dry-run` en operaciones que mutan.
+- Confirmación antes de apply real.
+
+## Salida
+
+- Usar Rich: tablas/resúmenes legibles.
+- El plan debe mostrar origen → destino (o acción de limpieza).
+- Errores claros; no abortar todo el lote por un archivo fallido si se puede continuar.

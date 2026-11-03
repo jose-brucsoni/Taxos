@@ -1,0 +1,11 @@
+---
+description: Convenciones Git para Taxos
+alwaysApply: true
+---
+
+# Git — Taxos
+
+- No crear commits ni push a menos que el usuario lo pida.
+- No commitear `.env`, secretos, `history.jsonl` ni configs con rutas personales.
+- Mensajes cortos y claros (`feat:`, `fix:`, `docs:`).
+- No usar `--force`, `--no-verify` ni amend salvo petición explícita.
