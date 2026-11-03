@@ -9,6 +9,11 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.log
+.coverage
+htmlcov/
+.tox/
+.eggs/
 
 # Entorno y secretos
 .env
