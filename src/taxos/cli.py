@@ -305,5 +305,57 @@ def gui() -> None:
         raise typer.Exit(code=1) from exc
 
 
+@app.command("watch")
+def watch(
+    path: Path | None = typer.Option(
+        None,
+        "--path",
+        "-p",
+        help="Carpeta a observar (por defecto: Descargas).",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+    ),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Organizar automáticamente (por defecto solo dry-run).",
+    ),
+    use_ai: bool = typer.Option(
+        False,
+        "--ai",
+        help="Usar IA al clasificar archivos nuevos.",
+    ),
+) -> None:
+    """Observa la carpeta y organiza archivos nuevos al estabilizarse."""
+    from taxos.watcher import run_watch
+
+    target = path or get_downloads_dir()
+    if not target.is_dir():
+        console.print(f"[red]No existe la carpeta:[/red] {target}")
+        raise typer.Exit(code=1)
+
+    mode = "[green]APPLY[/green]" if apply else "[yellow]DRY-RUN[/yellow]"
+    console.print(f"[bold]Observando:[/bold] {target}  ({mode})")
+    console.print("[dim]Ctrl+C para salir.[/dim]")
+
+    observer = run_watch(
+        target,
+        apply=apply,
+        use_ai=use_ai,
+        on_message=lambda msg: console.print(msg),
+    )
+    try:
+        while observer.is_alive():
+            observer.join(timeout=1.0)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Watch detenido.[/yellow]")
+    finally:
+        observer.stop()
+        observer.join(timeout=5.0)
+
+
 if __name__ == "__main__":
     app()
