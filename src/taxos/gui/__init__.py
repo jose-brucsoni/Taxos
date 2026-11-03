@@ -1,13 +1,13 @@
-"""Interfaz gráfica de Taxos."""
+"""Interfaz gráfica de Taxos (PyWebView)."""
 
 from __future__ import annotations
 
 
 def run_wizard() -> None:
-    """Carga el wizard bajo demanda (requiere Tk/CustomTkinter)."""
-    from taxos.gui.wizard import run_wizard as _run_wizard
+    """Abre el wizard web embebido."""
+    from taxos.gui.webview_app import run_webview
 
-    _run_wizard()
+    run_webview()
 
 
 __all__ = ["run_wizard"]

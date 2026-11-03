@@ -3,7 +3,7 @@
 import os
 import sys
 
-# PyInstaller --windowed deja stdout/stderr en None; Tk/CustomTkinter pueden colgarse.
+# PyInstaller --windowed deja stdout/stderr en None.
 if sys.stdout is None:
     sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
 if sys.stderr is None:
@@ -15,9 +15,6 @@ load_dotenv()
 
 
 def main() -> None:
-    # Cargar CTk antes del wizard (arranque más predecible en el .exe).
-    import customtkinter  # noqa: F401
-
     from taxos.gui import run_wizard
 
     run_wizard()

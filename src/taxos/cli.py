@@ -282,12 +282,12 @@ def undo(
 
 @app.command("gui")
 def gui() -> None:
-    """Abre el wizard gráfico (CustomTkinter)."""
+    """Abre el wizard gráfico (PyWebView)."""
     try:
         from taxos.gui import run_wizard
     except ImportError as exc:
         console.print(
-            "[red]Falta CustomTkinter.[/red] Ejecuta: pip install -e ."
+            "[red]Falta pywebview.[/red] Ejecuta: pip install -e ."
         )
         raise typer.Exit(code=1) from exc
 
@@ -295,8 +295,8 @@ def gui() -> None:
         run_wizard()
     except ImportError as exc:
         console.print(
-            "[red]No se pudo cargar Tkinter/CustomTkinter.[/red] "
-            "En Arch/Linux instala el paquete tk (libtk) e intenta de nuevo."
+            "[red]No se pudo cargar la GUI web (pywebview).[/red] "
+            "En Windows hace falta WebView2 Runtime (suele venir con Edge)."
         )
         console.print(f"[dim]{exc}[/dim]")
         raise typer.Exit(code=1) from exc

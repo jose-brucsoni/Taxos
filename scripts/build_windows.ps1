@@ -1,12 +1,33 @@
-# Genera dist/Taxos/ (onedir, GUI) y Taxos-win64.zip.
-# Sin --splash: PyInstaller splash usa Tcl/Tk y entra en conflicto con CustomTkinter.
-# Ejecutar en PowerShell desde Win64, con Python 3.11+ en PATH.
+# Genera dist/Taxos/ (onedir, GUI web) y Taxos-win64.zip.
+# Requiere Node 20+ (para ui/) y Python 3.11+ / .venv.
+# Ejecutar en PowerShell desde Win64.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $Root
 
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $Python)) { $Python = "python" }
+
+$Npm = Get-Command npm -ErrorAction SilentlyContinue
+if (-not $Npm) {
+    throw "npm no está en PATH. Instala Node.js LTS y vuelve a intentar."
+}
+
+Push-Location (Join-Path $Root "ui")
+try {
+    if (-not (Test-Path "node_modules")) {
+        npm ci
+        if ($LASTEXITCODE -ne 0) { npm install }
+    } else {
+        npm ci
+        if ($LASTEXITCODE -ne 0) { npm install }
+    }
+    npm run build
+    if ($LASTEXITCODE -ne 0) { throw "Falló npm run build" }
+}
+finally {
+    Pop-Location
+}
 
 & $Python -m pip install -e ".[build]"
 & $Python -m PyInstaller `
@@ -17,9 +38,9 @@ if (-not (Test-Path $Python)) { $Python = "python" }
   --name Taxos `
   --paths src `
   --collect-data taxos `
-  --collect-all customtkinter `
-  --add-data "assets/splash.png;assets" `
-  --hidden-import taxos.gui.wizard `
+  --add-data "ui/dist;ui/dist" `
+  --hidden-import taxos.gui.webview_app `
+  --hidden-import taxos.gui.api `
   src/taxos/run_gui.py
 
 # Evitar bloqueos: proceso abierto, OneDrive o antivirus.
@@ -88,7 +109,6 @@ try {
     $zipOk = $false
     for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
         try {
-            # ZIP en TEMP primero (fuera de OneDrive), luego copiar al destino.
             $TempZip = Join-Path $env:TEMP "Taxos-win64.zip"
             if (Test-Path $TempZip) { Remove-Item $TempZip -Force }
             Compress-DirectoryShared -SourceDir (Join-Path $Stage "Taxos") -DestinationZip $TempZip

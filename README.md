@@ -21,7 +21,8 @@ No hace falta (ni debes) meter un `.env` en esa carpeta para uso básico. Sin cl
 ### Stack
 
 - Python 3.11+, Typer, Rich, pathlib, platformdirs, send2trash, YAML, httpx, watchdog
-- GUI: CustomTkinter · IA: Groq (opt-in)
+- GUI: PyWebView + Vite/Tailwind · IA: Groq (opt-in)
+- Windows GUI: WebView2 Runtime (suele venir con Microsoft Edge)
 
 ### Instalación
 
@@ -30,6 +31,10 @@ python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
 cp .env.example .env        # opcional: GROQ_API_KEY
+
+# UI (Node 20+):
+cd ui && npm install && npm run build && cd ..
+
 taxos path
 taxos scan
 taxos organize              # dry-run
@@ -40,9 +45,18 @@ taxos watch
 taxos gui
 ```
 
+Desarrollo de la UI con hot-reload:
+
+```bash
+cd ui && npm run dev
+# otra terminal:
+set TAXOS_UI_DEV=1          # PowerShell: $env:TAXOS_UI_DEV=1
+taxos gui
+```
+
 ### Generar ejecutables
 
-**Windows 64-bit** (en un PC Windows; carpeta onedir, arranque más rápido que onefile):
+**Windows 64-bit** (en un PC Windows; carpeta onedir; el script construye la UI con npm):
 
 ```powershell
 .\scripts\build_windows.ps1

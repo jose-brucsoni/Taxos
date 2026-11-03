@@ -25,6 +25,9 @@ history.jsonl
 config.local.yaml
 *.local.yaml
 
+# Frontend
+ui/node_modules/
+
 # IDE / OS
 .idea/
 .vscode/
