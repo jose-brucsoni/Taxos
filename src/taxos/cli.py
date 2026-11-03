@@ -7,11 +7,13 @@ from rich.console import Console
 from rich.table import Table
 
 from taxos.classifier import classify_all
+from taxos.cleaner import apply_trash, find_candidates
 from taxos.config import load_rules
-from taxos.history import append_moves
+from taxos.history import append_moves, append_trash, append_undos, last_move_batch
 from taxos.organizer import apply_plan, build_plan
 from taxos.paths import get_downloads_dir
 from taxos.scanner import scan_dir
+from taxos.undo import apply_undo, build_undo_plan
 
 app = typer.Typer(help="Organiza la carpeta Descargas.", no_args_is_help=True)
 console = Console()
@@ -155,6 +157,109 @@ def organize(
     done = apply_plan(actions)
     log_path = append_moves(done)
     console.print(f"[green]Movidos:[/green] {len(done)} / {len(actions)}")
+    console.print(f"[bold]Log:[/bold] {log_path}")
+
+
+@app.command("clean")
+def clean(
+    path: Path | None = typer.Option(
+        None,
+        "--path",
+        "-p",
+        help="Carpeta a limpiar (por defecto: Descargas).",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+    ),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Enviar a papelera (por defecto solo dry-run).",
+    ),
+) -> None:
+    """Envía a papelera temporales, vacíos y locks seguros."""
+    target = path or get_downloads_dir()
+    if not target.is_dir():
+        console.print(f"[red]No existe la carpeta:[/red] {target}")
+        raise typer.Exit(code=1)
+
+    candidates = find_candidates(target)
+    mode = "[green]APPLY[/green]" if apply else "[yellow]DRY-RUN[/yellow]"
+    console.print(f"[bold]Carpeta:[/bold] {target}  ({mode})")
+    console.print(f"[bold]Candidatos:[/bold] {len(candidates)}")
+
+    if not candidates:
+        console.print("[yellow]Nada que limpiar.[/yellow]")
+        return
+
+    table = Table(title="Plan de limpieza")
+    table.add_column("Archivo")
+    table.add_column("Motivo", style="cyan")
+    table.add_column("Tamaño", justify="right")
+    for candidate in candidates:
+        table.add_row(candidate.path.name, candidate.reason, _format_size(candidate.size))
+    console.print(table)
+
+    if not apply:
+        console.print("[dim]Dry-run: no se borró nada. Usa --apply para enviar a papelera.[/dim]")
+        return
+
+    if not typer.confirm("¿Enviar estos archivos a la papelera?"):
+        console.print("[yellow]Cancelado.[/yellow]")
+        raise typer.Exit(code=0)
+
+    done = apply_trash(candidates)
+    log_path = append_trash(done)
+    console.print(f"[green]A papelera:[/green] {len(done)} / {len(candidates)}")
+    console.print(f"[bold]Log:[/bold] {log_path}")
+
+
+@app.command("undo")
+def undo(
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Aplicar deshacer (por defecto solo dry-run).",
+    ),
+) -> None:
+    """Deshace el último lote de organize (desde el log)."""
+    batch = last_move_batch()
+    mode = "[green]APPLY[/green]" if apply else "[yellow]DRY-RUN[/yellow]"
+    console.print(f"[bold]Undo último lote[/bold]  ({mode})")
+
+    if not batch:
+        console.print("[yellow]No hay movimientos en el historial.[/yellow]")
+        return
+
+    actions = build_undo_plan(batch)
+    console.print(f"[bold]Restauraciones:[/bold] {len(actions)}")
+
+    if not actions:
+        console.print(
+            "[yellow]Nada que deshacer (archivos ya no están en el destino).[/yellow]"
+        )
+        return
+
+    table = Table(title="Plan de undo")
+    table.add_column("Desde")
+    table.add_column("Hacia", style="cyan")
+    for action in actions:
+        table.add_row(str(action.src), str(action.dest))
+    console.print(table)
+
+    if not apply:
+        console.print("[dim]Dry-run: no se movió nada. Usa --apply para restaurar.[/dim]")
+        return
+
+    if not typer.confirm("¿Deshacer estos movimientos?"):
+        console.print("[yellow]Cancelado.[/yellow]")
+        raise typer.Exit(code=0)
+
+    done = apply_undo(actions)
+    log_path = append_undos(done)
+    console.print(f"[green]Restaurados:[/green] {len(done)} / {len(actions)}")
     console.print(f"[bold]Log:[/bold] {log_path}")
 
 

@@ -22,9 +22,9 @@ Núcleo CLI primero; luego wizard GUI; IA opcional; al final instalable.
 
 ## Fase 3 — Clean y undo
 
-- [ ] Candidatos seguros (tmp, vacíos, etc.)
-- [ ] Papelera (`send2trash`)
-- [ ] Deshacer desde el log
+- [x] Candidatos seguros (tmp, vacíos, etc.)
+- [x] Papelera (`send2trash`)
+- [x] Deshacer desde el log
 
 ## Fase 4 — GUI wizard
 

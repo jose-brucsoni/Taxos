@@ -21,6 +21,10 @@ taxos path
 taxos scan
 taxos organize              # dry-run
 taxos organize --apply      # mueve tras confirmar
+taxos clean                 # dry-run papelera
+taxos clean --apply
+taxos undo                  # dry-run último lote
+taxos undo --apply
 ```
 
 ## Guía
