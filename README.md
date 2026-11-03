@@ -1,58 +1,65 @@
 # Taxos
 
-Organiza la carpeta Descargas en Windows y Linux: clasifica, mueve y limpia con preview antes de aplicar. CLI + wizard gráfico. La IA (opcional) solo ve nombres de archivo, nunca el contenido.
+Organiza la carpeta Descargas en Windows y Linux: clasifica, mueve y limpia con preview antes de aplicar. La IA (opcional) solo ve nombres de archivo, nunca el contenido.
 
 Licencia: [MIT](LICENSE).
 
-## Stack
+## Para usuarios (Windows)
+
+No necesitas instalar Python.
+
+1. Ve a **Releases** en este repositorio.
+2. Descarga `Taxos.exe` (Win64).
+3. Doble clic → se abre el asistente gráfico.
+
+Si Windows SmartScreen avisa: *Más información* → *Ejecutar de todas formas*.  
+No empaquetes `.env` en el `.exe`. Sin clave, la IA del wizard no se usa (reglas locales).
+
+## Para desarrolladores
+
+### Stack
 
 - Python 3.11+, Typer, Rich, pathlib, platformdirs, send2trash, YAML, httpx, watchdog
 - GUI: CustomTkinter · IA: Groq (opt-in)
 
-## Privacidad
-
-Sin IA no sale nada del PC. Con `--ai` / checkbox solo se envían nombres. Clave en `.env` (`GROQ_API_KEY`), nunca en git.
-
-## Instalación (dev)
+### Instalación
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
-cp .env.example .env        # y añade tu GROQ_API_KEY
+cp .env.example .env        # opcional: GROQ_API_KEY
 taxos path
 taxos scan
 taxos organize              # dry-run
 taxos organize --apply
 taxos clean
 taxos undo
-taxos watch                 # dry-run al detectar archivos nuevos
+taxos watch
 taxos gui
 ```
 
-## Binario (one-click)
+### Generar ejecutables
 
-**Linux:**
-
-```bash
-pip install -e ".[build]"
-./scripts/build_linux.sh
-./dist/taxos --help
-```
-
-**Windows** (PowerShell, con venv activo):
+**Windows 64-bit** (en un PC Windows; abre el wizard al doble clic):
 
 ```powershell
-pip install -e ".[build]"
-pyinstaller --noconfirm --clean --onefile --name taxos --paths src --collect-data taxos --hidden-import taxos.gui.wizard src/taxos/cli.py
-.\dist\taxos.exe --help
+.\scripts\build_windows.ps1
+# → dist\Taxos.exe  → súbelo a GitHub Releases
 ```
 
-(AppImage / instalador `.msi` quedan para más adelante.)
+**Linux** (CLI one-file):
+
+```bash
+./scripts/build_linux.sh
+# → dist/taxos
+```
+
+No empaquetes `.env` en el binario.
 
 ## Publicar en GitHub
 
-1. Crea un repositorio vacío y **público** en GitHub (sin README).
+1. Crea un repositorio vacío y **público** (sin README).
 2. En este proyecto:
 
 ```bash
@@ -61,7 +68,7 @@ git branch -M main
 git push -u origin main
 ```
 
-No subas `.env`.
+Luego, en Windows: genera `Taxos.exe` y súbelo en **Releases**.
 
 ## Guía
 
