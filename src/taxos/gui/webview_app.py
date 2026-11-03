@@ -45,16 +45,48 @@ def _ui_url() -> str:
     return index.resolve().as_uri()
 
 
+def _screen_size() -> tuple[int, int]:
+    """Tamaño de la pantalla primaria (ancho, alto)."""
+    try:
+        screens = getattr(webview, "screens", None)
+        if screens:
+            screen = screens[0]
+            w = int(getattr(screen, "width", 0) or 0)
+            h = int(getattr(screen, "height", 0) or 0)
+            if w > 0 and h > 0:
+                return w, h
+    except Exception:
+        pass
+
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            return int(user32.GetSystemMetrics(0)), int(user32.GetSystemMetrics(1))
+        except Exception:
+            pass
+
+    return 1280, 800
+
+
 def run_webview() -> None:
-    """Abre el wizard en una ventana PyWebView."""
+    """Abre el wizard en una ventana PyWebView (~70% de la pantalla)."""
     api = TaxosApi()
     url = _ui_url()
+    sw, sh = _screen_size()
+    width = max(640, int(sw * 0.7))
+    height = max(480, int(sh * 0.7))
+    x = max(0, (sw - width) // 2)
+    y = max(0, (sh - height) // 2)
     webview.create_window(
-        "Taxos — organizar Descargas",
+        "Taxos",
         url=url,
         js_api=api,
-        width=720,
-        height=560,
-        min_size=(480, 360),
+        width=width,
+        height=height,
+        x=x,
+        y=y,
+        min_size=(640, 480),
     )
     webview.start()

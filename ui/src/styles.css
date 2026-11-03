@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@theme {
+  --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-sans: "Outfit", ui-sans-serif, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #ffffff;
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
 
 @keyframes taxos-progress {
   0% {
@@ -13,4 +26,26 @@
 
 .taxos-progress-bar {
   animation: taxos-progress 1.2s ease-in-out infinite;
+}
+
+.taxos-hero-img {
+  max-height: min(42vh, 280px);
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+@keyframes taxos-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.taxos-slide-enter {
+  animation: taxos-slide-in 260ms ease-out both;
 }

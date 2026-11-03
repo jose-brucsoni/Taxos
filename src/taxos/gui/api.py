@@ -22,6 +22,18 @@ def _has_groq_key() -> bool:
     return bool(os.environ.get("GROQ_API_KEY", "").strip())
 
 
+def _format_size(num_bytes: int) -> str:
+    units = ["B", "KB", "MB", "GB", "TB"]
+    size = float(num_bytes)
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(size)} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{num_bytes} B"
+
+
 class TaxosApi:
     def __init__(self) -> None:
         self.target = get_downloads_dir()
@@ -35,7 +47,7 @@ class TaxosApi:
         prefs = load_gui_prefs()
         return {
             "folder": str(self.target),
-            "theme": prefs.get("appearance_mode", "System"),
+            "theme": prefs.get("appearance_mode", "Light"),
             "has_groq_key": _has_groq_key(),
             "do_organize": self.do_organize,
             "do_clean": self.do_clean,
@@ -108,6 +120,7 @@ class TaxosApi:
             return {
                 "move_count": 0,
                 "trash_count": 0,
+                "groups": [],
                 "lines": [f"No existe la carpeta:\n{self.target}"],
             }
 
@@ -121,6 +134,61 @@ class TaxosApi:
 
         if self.do_clean:
             self.trash_candidates = find_candidates(self.target)
+
+        groups: list[dict[str, Any]] = []
+        folder_files: dict[str, list[dict[str, Any]]] = {}
+        folder_totals: dict[str, list[int]] = {}
+        for action in self.move_actions:
+            name = action.dest.parent.name
+            try:
+                size = action.src.stat().st_size
+            except OSError:
+                size = 0
+            bucket = folder_totals.setdefault(name, [0, 0])
+            bucket[0] += 1
+            bucket[1] += size
+            folder_files.setdefault(name, []).append(
+                {
+                    "name": action.src.name,
+                    "size_bytes": size,
+                    "size_label": _format_size(size),
+                }
+            )
+
+        for name in sorted(folder_totals.keys()):
+            count, size_bytes = folder_totals[name]
+            groups.append(
+                {
+                    "name": name,
+                    "kind": "move",
+                    "count": count,
+                    "size_bytes": size_bytes,
+                    "size_label": _format_size(size_bytes),
+                    "files": folder_files.get(name, []),
+                }
+            )
+
+        if self.trash_candidates:
+            trash_count = len(self.trash_candidates)
+            trash_size = sum(c.size for c in self.trash_candidates)
+            trash_files = [
+                {
+                    "name": c.path.name,
+                    "size_bytes": c.size,
+                    "size_label": _format_size(c.size),
+                }
+                for c in self.trash_candidates
+            ]
+            groups.append(
+                {
+                    "name": "Papelera",
+                    "kind": "trash",
+                    "count": trash_count,
+                    "size_bytes": trash_size,
+                    "size_label": _format_size(trash_size),
+                    "files": trash_files,
+                }
+            )
 
         lines: list[str] = []
         if self.do_organize:
@@ -146,6 +214,7 @@ class TaxosApi:
         return {
             "move_count": len(self.move_actions),
             "trash_count": len(self.trash_candidates),
+            "groups": groups,
             "lines": lines,
         }
 
