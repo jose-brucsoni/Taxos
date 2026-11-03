@@ -11,7 +11,7 @@ No necesitas instalar Python.
 1. Ve a **Releases** en este repositorio.
 2. Descarga `Taxos-win64.zip`.
 3. Descomprime la carpeta.
-4. Doble clic en `Taxos.exe` (verás una pantalla de carga breve y luego el asistente).
+4. Doble clic en `Taxos.exe` para abrir el asistente.
 
 Si Windows SmartScreen avisa: *Más información* → *Ejecutar de todas formas*.  
 No hace falta (ni debes) meter un `.env` en esa carpeta para uso básico. Sin clave de IA se usan solo reglas locales.
@@ -42,7 +42,7 @@ taxos gui
 
 ### Generar ejecutables
 
-**Windows 64-bit** (en un PC Windows; carpeta + splash, arranque más rápido que onefile):
+**Windows 64-bit** (en un PC Windows; carpeta onedir, arranque más rápido que onefile):
 
 ```powershell
 .\scripts\build_windows.ps1

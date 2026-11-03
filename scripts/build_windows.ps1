@@ -1,17 +1,20 @@
-# Genera dist/Taxos/ (onedir, GUI + splash) y Taxos-win64.zip.
+# Genera dist/Taxos/ (onedir, GUI) y Taxos-win64.zip.
+# Sin --splash: PyInstaller splash usa Tcl/Tk y entra en conflicto con CustomTkinter.
 # Ejecutar en PowerShell desde Win64, con Python 3.11+ en PATH.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $Root
 
-python -m pip install -e ".[build]"
-python -m PyInstaller `
+$Python = Join-Path $Root ".venv\Scripts\python.exe"
+if (-not (Test-Path $Python)) { $Python = "python" }
+
+& $Python -m pip install -e ".[build]"
+& $Python -m PyInstaller `
   --noconfirm `
   --clean `
   --onedir `
   --windowed `
   --name Taxos `
-  --splash assets/splash.png `
   --paths src `
   --collect-data taxos `
   --collect-all customtkinter `
