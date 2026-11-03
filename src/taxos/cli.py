@@ -10,11 +10,11 @@ from rich.table import Table
 from taxos.classifier import classify_with_optional_ai
 from taxos.cleaner import apply_trash, find_candidates
 from taxos.config import load_rules
-from taxos.history import append_moves, append_trash, append_undos, last_move_batch
+from taxos.history import append_organize_batch, append_trash, append_undos, last_reversible_batch
 from taxos.organizer import apply_plan, build_plan
 from taxos.paths import get_downloads_dir
 from taxos.scanner import scan_dir
-from taxos.undo import apply_undo, build_undo_plan
+from taxos.undo import execute_undo, summarize_batch
 
 load_dotenv()
 
@@ -135,7 +135,10 @@ def organize(
         help="Clasificar con IA (solo nombres; requiere GROQ_API_KEY).",
     ),
 ) -> None:
-    """Mueve archivos de la raíz a subcarpetas por categoría."""
+    """Mueve archivos de la raíz a subcarpetas por extensión.
+
+    El asistente gráfico ofrece más modos (fecha, nombre, proyectos, etc.).
+    """
     target = path or get_downloads_dir()
     if not target.is_dir():
         console.print(f"[red]No existe la carpeta:[/red] {target}")
@@ -171,8 +174,9 @@ def organize(
         console.print("[yellow]Cancelado.[/yellow]")
         raise typer.Exit(code=0)
 
-    done = apply_plan(actions)
-    log_path = append_moves(done)
+    created: list[Path] = []
+    done = apply_plan(actions, created)
+    log_path = append_organize_batch(done, created)
     console.print(f"[green]Movidos:[/green] {len(done)} / {len(actions)}")
     console.print(f"[bold]Log:[/bold] {log_path}")
 
@@ -242,42 +246,61 @@ def undo(
     ),
 ) -> None:
     """Deshace el último lote de organize (desde el log)."""
-    batch = last_move_batch()
+    batch = last_reversible_batch()
+    summary = summarize_batch(batch)
     mode = "[green]APPLY[/green]" if apply else "[yellow]DRY-RUN[/yellow]"
     console.print(f"[bold]Undo último lote[/bold]  ({mode})")
 
-    if not batch:
-        console.print("[yellow]No hay movimientos en el historial.[/yellow]")
+    if not summary.available:
+        console.print("[yellow]No hay una organización para deshacer.[/yellow]")
         return
 
-    actions = build_undo_plan(batch)
-    console.print(f"[bold]Restauraciones:[/bold] {len(actions)}")
-
-    if not actions:
+    console.print(f"[bold]Restauraciones:[/bold] {len(summary.actions)}")
+    if summary.tags:
+        console.print("[bold]Etiquetas:[/bold] se restaurará el archivo anterior")
+    if summary.created_dirs:
         console.print(
-            "[yellow]Nada que deshacer (archivos ya no están en el destino).[/yellow]"
+            f"[bold]Carpetas creadas:[/bold] {len(summary.created_dirs)} "
+            "(se eliminan si quedan vacías)"
         )
-        return
 
-    table = Table(title="Plan de undo")
-    table.add_column("Desde")
-    table.add_column("Hacia", style="cyan")
-    for action in actions:
-        table.add_row(str(action.src), str(action.dest))
-    console.print(table)
+    if summary.actions:
+        table = Table(title="Plan de undo")
+        table.add_column("Desde")
+        table.add_column("Hacia", style="cyan")
+        table.add_column("Nota")
+        for action in summary.actions:
+            note = "conflicto de nombre" if action.conflict else ""
+            table.add_row(str(action.src), str(action.dest), note)
+        console.print(table)
 
     if not apply:
         console.print("[dim]Dry-run: no se movió nada. Usa --apply para restaurar.[/dim]")
         return
 
-    if not typer.confirm("¿Deshacer estos movimientos?"):
+    if not typer.confirm("¿Deshacer esta organización?"):
         console.print("[yellow]Cancelado.[/yellow]")
         raise typer.Exit(code=0)
 
-    done = apply_undo(actions)
-    log_path = append_undos(done)
-    console.print(f"[green]Restaurados:[/green] {len(done)} / {len(actions)}")
-    console.print(f"[bold]Log:[/bold] {log_path}")
+    outcome = execute_undo(summary)
+    if not outcome.did_something:
+        console.print("[yellow]Nada que deshacer.[/yellow]")
+        return
+    log_path = append_undos(outcome.restored) if outcome.restored else None
+    conflicts = sum(1 for action in outcome.restored if action.conflict)
+    console.print(
+        f"[green]Restaurados:[/green] {len(outcome.restored)} / {len(summary.actions)}"
+    )
+    if conflicts:
+        console.print(f"[yellow]Con otro nombre por conflicto:[/yellow] {conflicts}")
+    if outcome.removed_dirs:
+        console.print(
+            f"[green]Carpetas vacías eliminadas:[/green] {len(outcome.removed_dirs)}"
+        )
+    if outcome.tags_restored:
+        console.print(f"[green]Etiquetas restauradas:[/green] {outcome.tags_restored}")
+    if log_path is not None:
+        console.print(f"[bold]Log:[/bold] {log_path}")
 
 
 @app.command("gui")

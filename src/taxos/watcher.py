@@ -12,7 +12,7 @@ from watchdog.observers import Observer
 
 from taxos.classifier import classify_with_optional_ai
 from taxos.config import load_rules
-from taxos.history import append_moves
+from taxos.history import append_organize_batch
 from taxos.organizer import apply_plan, build_plan
 from taxos.scanner import FileEntry
 
@@ -123,9 +123,10 @@ class _DownloadsHandler(FileSystemEventHandler):
         if not self.apply:
             return
 
-        done = apply_plan(actions)
+        created: list[Path] = []
+        done = apply_plan(actions, created)
         if done:
-            append_moves(done)
+            append_organize_batch(done, created)
 
 
 def run_watch(

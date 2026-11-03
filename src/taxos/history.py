@@ -45,6 +45,48 @@ def append_moves(actions: list[MoveAction]) -> Path:
     return _append_records(records)
 
 
+def append_organize_batch(
+    actions: list[MoveAction],
+    created_dirs: list[Path] | None = None,
+    *,
+    tags_path: Path | None = None,
+    tags_previous: str | None = None,
+    tags_written: bool = False,
+) -> Path:
+    """Registra carpetas creadas, movimientos y etiquetas con el mismo timestamp."""
+    now = _now()
+    records: list[dict[str, Any]] = []
+    for directory in created_dirs or []:
+        records.append(
+            {
+                "timestamp": now,
+                "action": "mkdir",
+                "path": str(directory),
+            }
+        )
+    for action in actions:
+        records.append(
+            {
+                "timestamp": now,
+                "action": "move",
+                "src": str(action.src),
+                "dest": str(action.dest),
+            }
+        )
+    if tags_written and tags_path is not None:
+        records.append(
+            {
+                "timestamp": now,
+                "action": "tags",
+                "path": str(tags_path),
+                "previous": tags_previous,
+            }
+        )
+    if not records:
+        return history_file()
+    return _append_records(records)
+
+
 def append_trash(candidates: list[TrashCandidate]) -> Path:
     """Añade una línea JSON por archivo enviado a papelera."""
     now = _now()
@@ -106,3 +148,21 @@ def last_move_batch() -> list[dict[str, Any]]:
         batch.append(record)
     batch.reverse()
     return batch
+
+
+def last_reversible_batch() -> list[dict[str, Any]]:
+    """Último lote que se puede deshacer: movimientos y/o etiquetas, con sus mkdir."""
+    records = read_records()
+    last_ts = None
+    for record in reversed(records):
+        if record.get("action") in {"move", "tags"}:
+            last_ts = record.get("timestamp")
+            break
+    if last_ts is None:
+        return []
+    return [
+        record
+        for record in records
+        if record.get("timestamp") == last_ts
+        and record.get("action") in {"move", "mkdir", "tags"}
+    ]

@@ -13,6 +13,7 @@ from taxos.scanner import FileEntry
 class MoveAction:
     src: Path
     dest: Path
+    conflict: bool = False
 
 
 def _unique_dest(dest: Path, reserved: set[Path]) -> Path:
@@ -53,17 +54,53 @@ def build_plan(
     return actions
 
 
-def apply_plan(actions: list[MoveAction]) -> list[MoveAction]:
-    """Crea carpetas y mueve archivos. Continúa si un archivo falla."""
+def _ensure_dir(path: Path) -> list[Path]:
+    """Crea `path` y devuelve solo los directorios que no existían."""
+    created: list[Path] = []
+    missing: list[Path] = []
+    current = path
+    while not current.exists():
+        missing.append(current)
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    for directory in reversed(missing):
+        directory.mkdir(exist_ok=True)
+        created.append(directory)
+    return created
+
+
+def _rollback_empty(dirs: list[Path]) -> None:
+    for directory in reversed(dirs):
+        try:
+            directory.rmdir()
+        except OSError:
+            break
+
+
+def apply_plan(
+    actions: list[MoveAction],
+    created_dirs: list[Path] | None = None,
+) -> list[MoveAction]:
+    """Crea carpetas y mueve archivos. Continúa si un archivo falla.
+
+    Si se pasa `created_dirs`, añade las carpetas creadas por los movimientos
+    que sí se completaron.
+    """
     done: list[MoveAction] = []
     for action in actions:
+        new_dirs: list[Path] = []
         try:
             if not action.src.is_file():
                 continue
-            action.dest.parent.mkdir(parents=True, exist_ok=True)
+            new_dirs = _ensure_dir(action.dest.parent)
             dest = _unique_dest(action.dest, set())
             shutil.move(str(action.src), str(dest))
             done.append(MoveAction(src=action.src, dest=dest))
+            if created_dirs is not None:
+                created_dirs.extend(new_dirs)
         except OSError:
+            _rollback_empty(new_dirs)
             continue
     return done
