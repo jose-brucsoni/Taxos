@@ -16,9 +16,9 @@ Núcleo CLI primero; luego wizard GUI; IA opcional; al final instalable.
 
 ## Fase 2 — Organize
 
-- [ ] Plan de movimientos
-- [ ] `taxos organize --dry-run`
-- [ ] Aplicar con confirmación + log
+- [x] Plan de movimientos
+- [x] `taxos organize` (dry-run por defecto)
+- [x] Aplicar con `--apply`, confirmación + log
 
 ## Fase 3 — Clean y undo
 

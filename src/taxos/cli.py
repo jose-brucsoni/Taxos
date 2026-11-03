@@ -8,6 +8,8 @@ from rich.table import Table
 
 from taxos.classifier import classify_all
 from taxos.config import load_rules
+from taxos.history import append_moves
+from taxos.organizer import apply_plan, build_plan
 from taxos.paths import get_downloads_dir
 from taxos.scanner import scan_dir
 
@@ -95,6 +97,65 @@ def scan(
         for entry, category in classified:
             detail.add_row(entry.name, category, _format_size(entry.size))
         console.print(detail)
+
+
+@app.command("organize")
+def organize(
+    path: Path | None = typer.Option(
+        None,
+        "--path",
+        "-p",
+        help="Carpeta a organizar (por defecto: Descargas).",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+    ),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Aplicar movimientos (por defecto solo dry-run).",
+    ),
+) -> None:
+    """Mueve archivos de la raíz a subcarpetas por categoría."""
+    target = path or get_downloads_dir()
+    if not target.is_dir():
+        console.print(f"[red]No existe la carpeta:[/red] {target}")
+        raise typer.Exit(code=1)
+
+    rules = load_rules()
+    entries = scan_dir(target)
+    classified = classify_all(entries, rules)
+    actions = build_plan(target, classified)
+
+    mode = "[green]APPLY[/green]" if apply else "[yellow]DRY-RUN[/yellow]"
+    console.print(f"[bold]Carpeta:[/bold] {target}  ({mode})")
+    console.print(f"[bold]Movimientos:[/bold] {len(actions)}")
+
+    if not actions:
+        console.print("[yellow]Nada que mover.[/yellow]")
+        return
+
+    table = Table(title="Plan de organización")
+    table.add_column("Origen")
+    table.add_column("Destino", style="cyan")
+    for action in actions:
+        table.add_row(action.src.name, str(action.dest.relative_to(target)))
+    console.print(table)
+
+    if not apply:
+        console.print("[dim]Dry-run: no se movió nada. Usa --apply para ejecutar.[/dim]")
+        return
+
+    if not typer.confirm("¿Aplicar estos movimientos?"):
+        console.print("[yellow]Cancelado.[/yellow]")
+        raise typer.Exit(code=0)
+
+    done = apply_plan(actions)
+    log_path = append_moves(done)
+    console.print(f"[green]Movidos:[/green] {len(done)} / {len(actions)}")
+    console.print(f"[bold]Log:[/bold] {log_path}")
 
 
 if __name__ == "__main__":

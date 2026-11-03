@@ -19,6 +19,8 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
 taxos path
 taxos scan
+taxos organize              # dry-run
+taxos organize --apply      # mueve tras confirmar
 ```
 
 ## Guía
