@@ -8,7 +8,7 @@ Licencia: [MIT](LICENSE).
 
 No necesitas instalar Python.
 
-1. Ve a **Releases** en este repositorio.
+1. **Ve a Releases en este repositorio.**
 2. Descarga `Taxos-win64.zip`.
 3. Descomprime la carpeta.
 4. Doble clic en `Taxos.exe` para abrir el asistente.
