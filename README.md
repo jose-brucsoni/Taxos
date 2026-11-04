@@ -15,7 +15,7 @@ Si te arrepientes, puedes deshacer. Lo eliminado va a la **papelera**.
 
 No necesitas instalar nada más.
 
-1. Entra en **Releases** de este proyecto.
+1. Abre la página de [Releases](https://github.com/jose-brucsoni/Taxos/releases).
 2. Descarga **Taxos-win64.zip**.
 3. Descomprime la carpeta.
 4. Abre **Taxos.exe**.

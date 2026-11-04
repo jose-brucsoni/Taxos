@@ -62,16 +62,11 @@ No empaquetes `.env` en el binario.
 
 ## Publicar en GitHub
 
-1. Crea un repositorio vacío y **público** (sin README).
-2. En este proyecto:
+El remoto del proyecto es [jose-brucsoni/Taxos](https://github.com/jose-brucsoni/Taxos). Las descargas van en [Releases](https://github.com/jose-brucsoni/Taxos/releases).
 
-```bash
-git remote add origin https://github.com/TU_USUARIO/Taxos.git
-git branch -M main
-git push -u origin main
-```
-
-Luego, en Windows: `.\scripts\build_windows.ps1` y sube `dist\Taxos-win64.zip` en **Releases**.
+1. Genera el zip en Windows: `.\scripts\build_windows.ps1`
+2. Sube `dist\Taxos-win64.zip` a **Releases**.
+3. Si tienes AppImage de Linux (`dist/Taxos-x86_64.AppImage`), súbelo en la misma release.
 
 ## Guía de fases
 
