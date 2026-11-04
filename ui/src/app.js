@@ -13,8 +13,6 @@ import iconSliders from "./icons/sliders-horizontal.svg?raw";
 import iconChevronSvg from "./icons/chevron-down.svg?raw";
 import iconFolderSvg from "./icons/folder.svg?raw";
 
-const LOADING_MS = 1200;
-
 const EXT_COLOR = {
   pdf: "text-red-600",
   doc: "text-blue-600",
@@ -208,7 +206,27 @@ export function createApp(root) {
     historyBatches: [],
     undoTimestamp: null,
     undoPreview: { lines: [], move_count: 0, conflict_count: 0, tags: false },
+    tutorialSeen: false,
+    previewTipSeen: false,
+    undoTipSeen: false,
   };
+
+  async function markFlag(name) {
+    const keyMap = {
+      tutorial_seen: "tutorialSeen",
+      preview_tip_seen: "previewTipSeen",
+      undo_tip_seen: "undoTipSeen",
+    };
+    const stateKey = keyMap[name];
+    if (!stateKey || state[stateKey]) return;
+    state[stateKey] = true;
+    if (!state.api) return;
+    try {
+      await state.api.set_onboarding_flag(name, true);
+    } catch {
+      /* la UI ya marcó el tip; se reintentará en otra sesión si falla */
+    }
+  }
 
   function applyTheme(_mode) {
     state.theme = "Light";
@@ -314,11 +332,16 @@ export function createApp(root) {
     `;
   }
 
-  function heroSlide({ title, imageSrc, imageAlt = "", subtitle, footerHtml, extraHtml = "" }) {
+  function heroSlide({ title, imageSrc, imageAlt = "", subtitle, footerHtml, extraHtml = "", step = null }) {
+    const stepHtml =
+      step != null
+        ? `<p class="mt-2 text-xs font-medium uppercase tracking-wider text-stone-400">Paso ${step} de 3</p>`
+        : "";
     return `
       <div class="flex min-h-screen w-full flex-col items-center justify-center bg-white px-6 py-8 sm:px-10">
         <div class="flex w-full max-w-2xl flex-col items-center text-center">
           <h2 class="font-display taxos-text-hero font-medium tracking-tight text-stone-900">${title}</h2>
+          ${stepHtml}
           <img src="${imageSrc}" alt="${escapeHtml(imageAlt)}" class="taxos-hero-img mt-6 drop-shadow-sm" onerror="this.style.display='none'" />
           <p class="mt-6 max-w-lg taxos-text-body font-light leading-relaxed text-stone-700">${subtitle}</p>
           ${extraHtml}
@@ -377,6 +400,7 @@ export function createApp(root) {
     if (id === "welcome") {
       return `
         <div class="taxos-welcome">
+          <button type="button" data-go="objetivo" class="taxos-welcome-skip ${btn("")}">Saltar</button>
           <div class="taxos-welcome-phase taxos-welcome-phase-taxonomy" aria-hidden="true">
             <p class="font-display taxos-text-hero font-medium tracking-tight text-stone-900">
               <strong class="font-semibold">Taxonomía</strong>: ciencia que clasifica y ordena.
@@ -404,10 +428,10 @@ export function createApp(root) {
         imageSrc: "./illustrations/goal.svg",
         imageAlt: "Ilustración de una meta",
         subtitle:
-          "Taxos te ayuda a ordenar los archivos de una carpeta y a quitar lo que ya no sirve. Puedes ver un tutorial corto o empezar ahora.",
+          "Nada se mueve ni se borra sin una vista previa y tu confirmación. Taxos ordena una carpeta y puede enviar sobrantes a la papelera (no los elimina para siempre).",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
-          <button type="button" data-go="choose_op" class="${btn("")}">Omitir tutorial</button>
+          <button type="button" data-go="choose_op" class="${btn("")}">Empezar ahora</button>
           <button type="button" data-go="tut_organize" class="${btn("", { primary: true })}">Ver tutorial</button>
         `,
       });
@@ -416,10 +440,11 @@ export function createApp(root) {
     if (id === "tut_organize") {
       return heroSlide({
         title: "Organizar",
+        step: 1,
         imageSrc: "./illustrations/organizing-projects.svg",
         imageAlt: "Ilustración de archivos agrupados en carpetas",
         subtitle:
-          "Taxos junta tus archivos en carpetas nuevas según lo que elijas: por tipo (fotos, PDF…), por fecha, por nombre, y otras formas. Así encuentras todo más fácil.",
+          "Agrupa archivos en carpetas según el modo que elijas. Por ejemplo, por extensión: los PDF van a una carpeta PDF.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
           <button type="button" data-go="tut_clean" class="${btn("", { primary: true })}">Siguiente</button>
@@ -429,11 +454,12 @@ export function createApp(root) {
 
     if (id === "tut_clean") {
       return heroSlide({
-        title: "Eliminar basura",
+        title: "Eliminar",
+        step: 2,
         imageSrc: "./illustrations/inbox-cleanup.svg",
         imageAlt: "Ilustración de una bandeja que se limpia",
         subtitle:
-          "Taxos puede enviar a la papelera cosas que suelen sobrar: archivos vacíos, temporales o restos de programas. No los borra para siempre: puedes recuperarlos desde la papelera de tu ordenador.",
+          "Envía a la papelera archivos vacíos, temporales o restos de programas. Puedes recuperarlos desde la papelera del sistema.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
           <button type="button" data-go="tut_both" class="${btn("", { primary: true })}">Siguiente</button>
@@ -444,10 +470,11 @@ export function createApp(root) {
     if (id === "tut_both") {
       return heroSlide({
         title: "Organizar y eliminar",
+        step: 3,
         imageSrc: "./illustrations/completed-tasks.svg",
         imageAlt: "Ilustración de tareas terminadas",
         subtitle:
-          "También puedes pedir a Taxos que ordene y limpie a la vez. Antes de cambiar nada, siempre te muestra qué va a hacer para que tú digas que sí.",
+          "Puedes ordenar y limpiar a la vez. Antes de aplicar, Taxos siempre muestra el plan para que confirmes.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
           <button type="button" data-go="choose_op" class="${btn("", { primary: true })}">Elegir operación</button>
@@ -480,7 +507,7 @@ export function createApp(root) {
         </div>
         `,
         `
-        <button type="button" data-action="back" class="${btn("")}">Atrás</button>
+        <button type="button" data-go="tut_organize" class="${btn("")}">Cómo funciona</button>
         <div class="ml-auto"></div>
         ${historyButton()}
         `
@@ -628,9 +655,22 @@ export function createApp(root) {
           </ul>`
         : `<p class="mt-8 taxos-text-body font-light text-stone-500">Nada que hacer en esta carpeta con la operación elegida.</p>`;
 
+      const previewTip = state.previewTipSeen
+        ? ""
+        : `
+        <div class="taxos-callout mt-6" role="status">
+          <p class="taxos-text-body font-light text-stone-700">
+            Esto es solo un plan: aún no se ha movido ni borrado nada. Nada cambia hasta que confirmes.
+          </p>
+          <button type="button" data-action="dismiss-preview-tip" class="mt-2 text-xs font-medium text-stone-500 underline-offset-2 hover:underline">
+            Entendido
+          </button>
+        </div>`;
+
       return shell(
         `
         ${titleBlock("Vista previa", "Resumen por carpeta antes de aplicar. Pulsa una carpeta para ver los archivos.")}
+        ${previewTip}
         ${listHtml}
         `,
         `
@@ -737,8 +777,17 @@ export function createApp(root) {
     }
 
     if (id === "done") {
+      const undoTip =
+        !state.undoTipSeen && state.hasHistory
+          ? `<p class="taxos-callout mt-6 taxos-text-body font-light text-stone-700" role="status">
+              Puedes deshacer organizaciones desde Historial.
+            </p>`
+          : "";
       return shell(
-        titleBlock("Listo", state.resultMessage),
+        `
+        ${titleBlock("Listo", state.resultMessage)}
+        ${undoTip}
+        `,
         `
         <button type="button" data-action="close" class="${btn("")}">Cerrar</button>
         <div class="ml-auto flex flex-wrap gap-2">
@@ -756,12 +805,23 @@ export function createApp(root) {
     root.querySelectorAll("[data-go]").forEach((el) => {
       el.addEventListener("click", async () => {
         const dest = el.getAttribute("data-go");
-        if (dest === "choose_op") await refreshUndo();
+        if (dest === "choose_op") {
+          await markFlag("tutorial_seen");
+          await refreshUndo();
+        }
+        if (dest === "confirm") {
+          await markFlag("preview_tip_seen");
+        }
         go(dest);
       });
     });
 
     root.querySelector('[data-action="back"]')?.addEventListener("click", back);
+
+    root.querySelector('[data-action="dismiss-preview-tip"]')?.addEventListener("click", async () => {
+      await markFlag("preview_tip_seen");
+      render({ animate: false });
+    });
 
     root.querySelector('[data-action="confirm-no"]')?.addEventListener("click", () => {
       go("preview", { push: false });
@@ -859,6 +919,7 @@ export function createApp(root) {
     });
 
     root.querySelector('[data-action="open-history"]')?.addEventListener("click", async () => {
+      await markFlag("undo_tip_seen");
       await refreshHistory();
       go("history");
     });
@@ -896,10 +957,12 @@ export function createApp(root) {
     });
 
     root.querySelector('[data-action="close"]')?.addEventListener("click", async () => {
+      await markFlag("undo_tip_seen");
       await withApi((api) => api.close_app());
     });
 
     root.querySelector('[data-action="again"]')?.addEventListener("click", async () => {
+      await markFlag("undo_tip_seen");
       await withApi((api) => api.reset_operation());
       state.useAi = false;
       state.orgMethod = null;
@@ -974,19 +1037,23 @@ export function createApp(root) {
   async function boot() {
     applyTheme("Light");
     render();
-    setTimeout(() => {
-      if (state.slideId === "loading") go("welcome", { push: false });
-    }, LOADING_MS);
 
     try {
       state.api = await waitForApi();
       const s = await state.api.get_state();
       state.folder = s.folder || "";
       state.hasGroqKey = Boolean(s.has_groq_key);
+      state.tutorialSeen = Boolean(s.tutorial_seen);
+      state.previewTipSeen = Boolean(s.preview_tip_seen);
+      state.undoTipSeen = Boolean(s.undo_tip_seen);
       applyTheme("Light");
       await state.api.set_theme("Light");
       await refreshUndo();
-      render();
+      if (state.tutorialSeen) {
+        go("choose_op", { push: false });
+      } else {
+        go("welcome", { push: false });
+      }
     } catch (err) {
       state.error = String(err.message || err);
       render();

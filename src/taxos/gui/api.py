@@ -10,7 +10,7 @@ import webview
 
 from taxos.cleaner import TrashCandidate, apply_trash, find_candidates
 from taxos.config import load_rules
-from taxos.gui.prefs import load_gui_prefs, save_gui_prefs
+from taxos.gui.prefs import ONBOARDING_FLAGS, load_gui_prefs, save_gui_prefs, update_gui_prefs
 from taxos.history import (
     append_organize_batch,
     append_trash,
@@ -104,6 +104,9 @@ class TaxosApi:
             "do_organize": self.do_organize,
             "do_clean": self.do_clean,
             "use_ai": self.use_ai,
+            "tutorial_seen": bool(prefs.get("tutorial_seen")),
+            "preview_tip_seen": bool(prefs.get("preview_tip_seen")),
+            "undo_tip_seen": bool(prefs.get("undo_tip_seen")),
         }
 
     def set_theme(self, mode: str) -> dict[str, Any]:
@@ -111,6 +114,12 @@ class TaxosApi:
             mode = "System"
         save_gui_prefs({"appearance_mode": mode})
         return {"ok": True, "theme": mode}
+
+    def set_onboarding_flag(self, name: str, value: bool = True) -> dict[str, Any]:
+        if name not in ONBOARDING_FLAGS:
+            return {"ok": False, "error": "Flag de onboarding desconocido."}
+        prefs = update_gui_prefs(**{name: bool(value)})
+        return {"ok": True, "name": name, "value": bool(prefs.get(name))}
 
     def set_operation(self, kind: str) -> dict[str, Any]:
         if kind == "organize":
