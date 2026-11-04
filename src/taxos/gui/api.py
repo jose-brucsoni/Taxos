@@ -8,11 +8,17 @@ from typing import Any
 
 import webview
 
-from taxos.classifier import classify_with_optional_ai
 from taxos.cleaner import TrashCandidate, apply_trash, find_candidates
 from taxos.config import load_rules
 from taxos.gui.prefs import load_gui_prefs, save_gui_prefs
-from taxos.history import append_organize_batch, append_trash, append_undos, last_reversible_batch
+from taxos.history import (
+    append_organize_batch,
+    append_trash,
+    append_undos,
+    last_reversible_batch,
+    list_history_batches,
+    reversible_batch_at,
+)
 from taxos.organize_modes import (
     TAGS_FILENAME,
     OrganizeError,
@@ -24,7 +30,7 @@ from taxos.organize_modes import (
     tags_path,
     write_tags,
 )
-from taxos.organizer import MoveAction, apply_plan, build_plan
+from taxos.organizer import MoveAction, apply_plan
 from taxos.paths import get_downloads_dir
 from taxos.scanner import scan_dir
 from taxos.undo import UndoOutcome, UndoSummary, execute_undo, summarize_batch
@@ -195,17 +201,7 @@ class TaxosApi:
         if self.do_organize:
             rules = load_rules()
             entries = scan_dir(self.target)
-            if self.request.method == "extension" and self.use_ai:
-                classified, _note = classify_with_optional_ai(
-                    entries, rules, use_ai=True
-                )
-                visible = [
-                    (entry, category)
-                    for entry, category in classified
-                    if not entry.name.startswith(".")
-                ]
-                self.move_actions = build_plan(self.target, visible)
-            elif self.request.method == "tags":
+            if self.request.method == "tags":
                 self.tag_mapping = assign_tags(entries, rules)
             else:
                 try:
@@ -373,34 +369,63 @@ class TaxosApi:
                 tags_path=tags_file,
                 tags_previous=tags_previous,
                 tags_written=bool(tagged),
+                tag_count=tagged,
+                root=self.target,
+                method=self.request.method,
             )
         if self.trash_candidates:
             done_trash = apply_trash(self.trash_candidates)
-            append_trash(done_trash)
+            append_trash(done_trash, root=self.target)
             trashed = len(done_trash)
 
         parts = [f"Movidos: {moved}.", f"A papelera: {trashed}."]
         if tagged:
             parts.append(f"Etiquetados: {tagged}.")
-        parts.append("Puedes deshacer la organización desde esta ventana.")
+        parts.append("Puedes deshacer la organización desde el historial.")
+        batches = list_history_batches()
         return {
             "ok": True,
             "message": " ".join(parts),
             "moved": moved,
             "trashed": trashed,
             "tagged": tagged,
-            "can_undo": moved > 0 or tagged > 0,
+            "can_undo": any(batch.get("can_undo") for batch in batches),
+            "has_history": bool(batches),
+        }
+
+    def history_batches(self) -> dict[str, Any]:
+        batches = list_history_batches()
+        return {
+            "batches": batches,
+            "has_history": bool(batches),
+            "can_undo": any(batch.get("can_undo") for batch in batches),
         }
 
     def undo_status(self) -> dict[str, Any]:
-        summary = summarize_batch(last_reversible_batch())
-        return _undo_payload(summary)
+        batches = list_history_batches()
+        payload = _undo_payload(summarize_batch(last_reversible_batch()))
+        payload["has_history"] = bool(batches)
+        payload["batches"] = batches
+        return payload
 
-    def undo_preview(self) -> dict[str, Any]:
-        return _undo_payload(summarize_batch(last_reversible_batch()))
+    def undo_preview(self, timestamp: str | None = None) -> dict[str, Any]:
+        if timestamp:
+            batch = reversible_batch_at(str(timestamp))
+        else:
+            batch = last_reversible_batch()
+            timestamp = batch[0].get("timestamp") if batch else None
+        payload = _undo_payload(summarize_batch(batch))
+        payload["timestamp"] = timestamp
+        return payload
 
-    def apply_undo(self) -> dict[str, Any]:
-        summary = summarize_batch(last_reversible_batch())
+    def apply_undo(self, timestamp: str | None = None) -> dict[str, Any]:
+        if timestamp:
+            batch = reversible_batch_at(str(timestamp))
+            batch_ts = str(timestamp)
+        else:
+            batch = last_reversible_batch()
+            batch_ts = str(batch[0].get("timestamp")) if batch else ""
+        summary = summarize_batch(batch)
         if not summary.available:
             return {"ok": False, "error": "No hay una organización para deshacer."}
         outcome = execute_undo(summary)
@@ -409,9 +434,14 @@ class TaxosApi:
                 "ok": False,
                 "error": "Nada que deshacer. Los archivos ya no están en el destino.",
             }
-        if outcome.restored:
-            append_undos(outcome.restored)
-        return {"ok": True, "message": _undo_message(outcome), "can_undo": False}
+        append_undos(outcome.restored, batch_timestamp=batch_ts or None)
+        batches = list_history_batches()
+        return {
+            "ok": True,
+            "message": _undo_message(outcome),
+            "can_undo": any(batch.get("can_undo") for batch in batches),
+            "has_history": bool(batches),
+        }
 
     def reset_operation(self) -> dict[str, Any]:
         self.move_actions = []

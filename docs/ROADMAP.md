@@ -28,7 +28,7 @@ Núcleo CLI primero; luego wizard GUI; IA opcional; al final instalable.
 
 ## Fase 4 — GUI wizard
 
-- [x] CustomTkinter: preguntas (cómo organizar / qué conservar)
+- [x] PyWebView + Vite/Tailwind (asistente): preguntas (cómo organizar / qué conservar)
 - [x] Preview del plan
 - [x] Confirmar y aplicar (usa el núcleo)
 

@@ -126,7 +126,7 @@ class _DownloadsHandler(FileSystemEventHandler):
         created: list[Path] = []
         done = apply_plan(actions, created)
         if done:
-            append_organize_batch(done, created)
+            append_organize_batch(done, created, root=self.root, method="watch")
 
 
 def run_watch(

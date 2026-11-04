@@ -8,12 +8,12 @@ alwaysApply: false
 
 ## Comandos
 
-- `scan`, `organize`, `clean` (y luego `watch`).
-- Flag `--dry-run` en operaciones que mutan.
-- Confirmación antes de apply real.
+- `path`, `scan`, `organize`, `clean`, `undo`, `watch`, `gui`.
+- Mutaciones: dry-run por defecto; apply real con `--apply` y confirmación.
+- Flag `--ai` solo envía nombres de archivo (requiere `GROQ_API_KEY`).
 
 ## Salida
 
-- Usar Rich: tablas/resúmenes legibles.
+- Usar Rich: tablas y resúmenes legibles.
 - El plan debe mostrar origen → destino (o acción de limpieza).
 - Errores claros; no abortar todo el lote por un archivo fallido si se puede continuar.

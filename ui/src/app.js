@@ -15,11 +15,59 @@ import iconFolderSvg from "./icons/folder.svg?raw";
 
 const LOADING_MS = 1200;
 
+const EXT_COLOR = {
+  pdf: "text-red-600",
+  doc: "text-blue-600",
+  docx: "text-blue-600",
+  odt: "text-blue-600",
+  txt: "text-stone-600",
+  md: "text-stone-600",
+  xls: "text-green-600",
+  xlsx: "text-green-600",
+  csv: "text-green-600",
+  ppt: "text-orange-600",
+  pptx: "text-orange-600",
+  jpg: "text-fuchsia-600",
+  jpeg: "text-fuchsia-600",
+  png: "text-fuchsia-600",
+  gif: "text-fuchsia-600",
+  webp: "text-fuchsia-600",
+  bmp: "text-fuchsia-600",
+  svg: "text-fuchsia-600",
+  heic: "text-fuchsia-600",
+  mp4: "text-indigo-600",
+  mkv: "text-indigo-600",
+  avi: "text-indigo-600",
+  mov: "text-indigo-600",
+  webm: "text-indigo-600",
+  wmv: "text-indigo-600",
+  mp3: "text-teal-600",
+  wav: "text-teal-600",
+  flac: "text-teal-600",
+  ogg: "text-teal-600",
+  m4a: "text-teal-600",
+  aac: "text-teal-600",
+  zip: "text-amber-600",
+  rar: "text-amber-600",
+  "7z": "text-amber-600",
+  tar: "text-amber-600",
+  gz: "text-amber-600",
+  tgz: "text-amber-600",
+  bz2: "text-amber-600",
+  exe: "text-stone-500",
+  msi: "text-stone-500",
+  deb: "text-stone-500",
+  rpm: "text-stone-500",
+  appimage: "text-stone-500",
+  dmg: "text-stone-500",
+  pkg: "text-stone-500",
+};
+
 const ORG_METHODS = [
   {
     id: "extension",
     title: "Por extensión",
-    description: "Clasifica según el tipo de archivo (.pdf, .jpg, .docx, .zip…).",
+    description: "Una subcarpeta por cada extensión presente (.pdf, .jpg, .docx, .zip…).",
     enabled: true,
     icon: iconFiles,
   },
@@ -76,7 +124,7 @@ const ORG_METHODS = [
 
 function btn(label, { primary = false, danger = false, muted = false } = {}) {
   const base =
-    "inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-medium tracking-wide transition focus:outline-none focus:ring-2 focus:ring-stone-400/40 disabled:cursor-not-allowed disabled:opacity-45";
+    "inline-flex items-center justify-center rounded-md px-5 py-2.5 taxos-text-body font-medium tracking-wide transition focus:outline-none focus:ring-2 focus:ring-stone-400/40 disabled:cursor-not-allowed disabled:opacity-45";
   if (primary) {
     return `${base} bg-stone-900 text-stone-50 hover:bg-stone-800`;
   }
@@ -122,6 +170,22 @@ function escapeHtml(text) {
     .replaceAll('"', "&quot;");
 }
 
+function formatBatchWhen(iso) {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return String(iso);
+  return date.toLocaleString("es", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function folderBasename(path) {
+  if (!path) return "—";
+  const parts = String(path).replace(/\\/g, "/").split("/").filter(Boolean);
+  return parts[parts.length - 1] || path;
+}
+
 export function createApp(root) {
   const state = {
     slideId: "loading",
@@ -140,6 +204,9 @@ export function createApp(root) {
     error: "",
     api: null,
     canUndo: false,
+    hasHistory: false,
+    historyBatches: [],
+    undoTimestamp: null,
     undoPreview: { lines: [], move_count: 0, conflict_count: 0, tags: false },
   };
 
@@ -196,8 +263,26 @@ export function createApp(root) {
     try {
       const status = await state.api.undo_status();
       state.canUndo = Boolean(status?.available);
+      state.hasHistory = Boolean(status?.has_history);
+      if (Array.isArray(status?.batches)) {
+        state.historyBatches = status.batches;
+      }
     } catch {
       state.canUndo = false;
+      state.hasHistory = false;
+    }
+  }
+
+  async function refreshHistory() {
+    if (!state.api) return;
+    try {
+      const res = await state.api.history_batches();
+      state.historyBatches = res?.batches || [];
+      state.hasHistory = Boolean(res?.has_history);
+      state.canUndo = Boolean(res?.can_undo);
+    } catch {
+      state.historyBatches = [];
+      state.hasHistory = false;
     }
   }
 
@@ -207,7 +292,7 @@ export function createApp(root) {
         <main class="flex min-h-screen flex-1 flex-col">${bodyHtml}</main>
         ${
           state.error
-            ? `<p class="px-6 text-sm text-red-700/90">${state.error}</p>`
+            ? `<p class="px-6 taxos-text-body text-red-700/90">${state.error}</p>`
             : ""
         }
       `;
@@ -217,7 +302,7 @@ export function createApp(root) {
         <main class="flex flex-1 flex-col">${bodyHtml}</main>
         ${
           state.error
-            ? `<p class="mt-3 text-sm text-red-700/90">${state.error}</p>`
+            ? `<p class="mt-3 taxos-text-body text-red-700/90">${state.error}</p>`
             : ""
         }
         ${
@@ -231,42 +316,45 @@ export function createApp(root) {
 
   function heroSlide({ title, imageSrc, imageAlt = "", subtitle, footerHtml, extraHtml = "" }) {
     return `
-      <div class="flex min-h-screen w-full flex-col bg-white">
-        <div class="px-6 pt-10 text-center sm:px-10 sm:pt-12">
-          <h2 class="font-display text-3xl font-medium tracking-tight text-stone-900 sm:text-4xl">${title}</h2>
-        </div>
-        <div class="flex flex-1 items-center justify-center px-6 py-4">
-          <img src="${imageSrc}" alt="${escapeHtml(imageAlt)}" class="taxos-hero-img drop-shadow-sm" onerror="this.style.display='none'" />
-        </div>
-        <div class="px-6 pb-4 text-center sm:px-10">
-          <p class="mx-auto max-w-lg text-sm font-light leading-relaxed text-stone-700 sm:text-base">${subtitle}</p>
+      <div class="flex min-h-screen w-full flex-col items-center justify-center bg-white px-6 py-8 sm:px-10">
+        <div class="flex w-full max-w-2xl flex-col items-center text-center">
+          <h2 class="font-display taxos-text-hero font-medium tracking-tight text-stone-900">${title}</h2>
+          <img src="${imageSrc}" alt="${escapeHtml(imageAlt)}" class="taxos-hero-img mt-6 drop-shadow-sm" onerror="this.style.display='none'" />
+          <p class="mt-6 max-w-lg taxos-text-body font-light leading-relaxed text-stone-700">${subtitle}</p>
           ${extraHtml}
+          ${
+            footerHtml
+              ? `<footer class="mt-8 flex w-full flex-wrap items-center justify-center gap-2">${footerHtml}</footer>`
+              : ""
+          }
+          ${
+            state.error
+              ? `<p class="mt-4 taxos-text-body text-red-700/90">${state.error}</p>`
+              : ""
+          }
         </div>
-        ${
-          footerHtml
-            ? `<footer class="flex flex-wrap items-center gap-2 px-6 pb-8 pt-2 sm:px-10">${footerHtml}</footer>`
-            : ""
-        }
-        ${
-          state.error
-            ? `<p class="px-6 pb-4 text-sm text-red-700/90">${state.error}</p>`
-            : ""
-        }
       </div>
     `;
   }
 
   function titleBlock(h, p) {
     return `
-      <h2 class="font-display text-2xl font-medium tracking-tight text-stone-900">${h}</h2>
-      <p class="mt-2 text-sm font-light leading-relaxed text-stone-600">${p}</p>
+      <h2 class="font-display taxos-text-title font-medium tracking-tight text-stone-900">${h}</h2>
+      <p class="mt-2 taxos-text-body font-light leading-relaxed text-stone-600">${p}</p>
     `;
   }
 
-  function groupIcon(kind) {
+  function groupIcon(kind, name = "") {
     if (kind === "trash") return svgIcon(iconTrashSvg, "text-stone-500");
     if (kind === "tag") return svgIcon(iconTags, "text-stone-500");
-    return svgIcon(iconFolderSvg, "text-stone-500");
+    const key = String(name || "").toLowerCase();
+    const color = EXT_COLOR[key] || "text-stone-500";
+    return svgIcon(iconFolderSvg, color);
+  }
+
+  function historyButton() {
+    if (!state.hasHistory) return "";
+    return `<button type="button" data-action="open-history" class="${btn("")}">Historial</button>`;
   }
 
   function renderSlide() {
@@ -287,16 +375,27 @@ export function createApp(root) {
     }
 
     if (id === "welcome") {
-      return heroSlide({
-        title: "Bienvenido/a",
-        imageSrc: "./illustrations/welcome.svg",
-        imageAlt: "Ilustración de bienvenida",
-        subtitle: "Organiza y limpia archivos basura de tu carpeta de descargas.",
-        footerHtml: `
-          <div class="ml-auto"></div>
-          <button type="button" data-go="objetivo" class="${btn("", { primary: true })}">Comenzar</button>
-        `,
-      });
+      return `
+        <div class="taxos-welcome">
+          <div class="taxos-welcome-phase taxos-welcome-phase-taxonomy" aria-hidden="true">
+            <p class="font-display taxos-text-hero font-medium tracking-tight text-stone-900">
+              <strong class="font-semibold">Taxonomía</strong>: ciencia que clasifica y ordena.
+            </p>
+            <p class="taxos-text-body font-light text-stone-600">De ahí viene Taxos.</p>
+          </div>
+          <div class="taxos-welcome-phase taxos-welcome-phase-brand">
+            <h2 class="font-display taxos-text-hero font-medium tracking-tight text-stone-900">Taxos</h2>
+            <div class="mt-8 flex w-full justify-center">
+              <button type="button" data-go="objetivo" class="${btn("", { primary: true })}">Comenzar</button>
+            </div>
+          </div>
+          ${
+            state.error
+              ? `<p class="mt-4 taxos-text-body text-red-700/90">${state.error}</p>`
+              : ""
+          }
+        </div>
+      `;
     }
 
     if (id === "objetivo") {
@@ -305,13 +404,11 @@ export function createApp(root) {
         imageSrc: "./illustrations/goal.svg",
         imageAlt: "Ilustración de una meta",
         subtitle:
-          "Puedes organizar archivos por categoría, eliminar basura segura (tmp, vacíos, locks) o ambas cosas. Elige si quieres un tutorial breve.",
+          "Taxos te ayuda a ordenar los archivos de una carpeta y a quitar lo que ya no sirve. Puedes ver un tutorial corto o empezar ahora.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
-          <div class="ml-auto flex flex-wrap gap-2">
-            <button type="button" data-go="choose_op" class="${btn("")}">Omitir tutorial</button>
-            <button type="button" data-go="tut_organize" class="${btn("", { primary: true })}">Ver tutorial</button>
-          </div>
+          <button type="button" data-go="choose_op" class="${btn("")}">Omitir tutorial</button>
+          <button type="button" data-go="tut_organize" class="${btn("", { primary: true })}">Ver tutorial</button>
         `,
       });
     }
@@ -322,10 +419,9 @@ export function createApp(root) {
         imageSrc: "./illustrations/organizing-projects.svg",
         imageAlt: "Ilustración de archivos agrupados en carpetas",
         subtitle:
-          "Mueve archivos de la raíz de Descargas a subcarpetas: por tipo, fecha, nombre, proyecto, duplicados o etiquetas.",
+          "Taxos junta tus archivos en carpetas nuevas según lo que elijas: por tipo (fotos, PDF…), por fecha, por nombre, y otras formas. Así encuentras todo más fácil.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
-          <div class="ml-auto"></div>
           <button type="button" data-go="tut_clean" class="${btn("", { primary: true })}">Siguiente</button>
         `,
       });
@@ -337,10 +433,9 @@ export function createApp(root) {
         imageSrc: "./illustrations/inbox-cleanup.svg",
         imageAlt: "Ilustración de una bandeja que se limpia",
         subtitle:
-          "Envía a la papelera archivos temporales, vacíos o locks de forma segura. No borra de forma permanente.",
+          "Taxos puede enviar a la papelera cosas que suelen sobrar: archivos vacíos, temporales o restos de programas. No los borra para siempre: puedes recuperarlos desde la papelera de tu ordenador.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
-          <div class="ml-auto"></div>
           <button type="button" data-go="tut_both" class="${btn("", { primary: true })}">Siguiente</button>
         `,
       });
@@ -352,10 +447,9 @@ export function createApp(root) {
         imageSrc: "./illustrations/completed-tasks.svg",
         imageAlt: "Ilustración de tareas terminadas",
         subtitle:
-          "También puedes combinar ambas acciones en una sola pasada. Siempre verás un preview antes de confirmar.",
+          "También puedes pedir a Taxos que ordene y limpie a la vez. Antes de cambiar nada, siempre te muestra qué va a hacer para que tú digas que sí.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
-          <div class="ml-auto"></div>
           <button type="button" data-go="choose_op" class="${btn("", { primary: true })}">Elegir operación</button>
         `,
       });
@@ -363,9 +457,9 @@ export function createApp(root) {
 
     if (id === "choose_op") {
       const cell =
-        "flex min-h-[6.5rem] flex-col items-center justify-center gap-2 rounded-lg border border-stone-300/60 bg-white px-3 py-4 text-sm font-medium tracking-wide text-stone-800 transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-400/30";
+        "flex min-h-[6.5rem] flex-col items-center justify-center gap-2 rounded-lg border border-stone-300/60 bg-white px-3 py-4 taxos-text-body font-medium tracking-wide text-stone-800 transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-400/30";
       const cellMuted =
-        "flex min-h-[6.5rem] cursor-not-allowed flex-col items-center justify-center gap-1 rounded-lg border border-stone-200/80 bg-stone-100/50 px-3 py-4 text-sm font-medium tracking-wide text-stone-400";
+        "flex min-h-[6.5rem] cursor-not-allowed flex-col items-center justify-center gap-1 rounded-lg border border-stone-200/80 bg-stone-100/50 px-3 py-4 taxos-text-body font-medium tracking-wide text-stone-400";
       const option = (op, label, icon) => `
         <button type="button" data-op="${op}" class="${cell}">
           ${svgIcon(icon, "text-stone-600")}
@@ -388,11 +482,7 @@ export function createApp(root) {
         `
         <button type="button" data-action="back" class="${btn("")}">Atrás</button>
         <div class="ml-auto"></div>
-        ${
-          state.canUndo
-            ? `<button type="button" data-action="undo" class="${btn("")}">Deshacer última organización</button>`
-            : ""
-        }
+        ${historyButton()}
         `
       );
     }
@@ -400,9 +490,9 @@ export function createApp(root) {
     if (id === "folder") {
       return shell(
         `
-        ${titleBlock("Carpeta", "Por defecto se usa tu carpeta Descargas.")}
+        ${titleBlock("Carpeta", "Elige la carpeta a organizar; por defecto se sugiere la del sistema.")}
         <div class="mt-6 flex items-center gap-3 border-b border-stone-300/70 py-3">
-          <p class="min-w-0 flex-1 break-all text-sm font-light text-stone-700">${state.folder || "—"}</p>
+          <p class="min-w-0 flex-1 break-all taxos-text-body font-light text-stone-700">${state.folder || "—"}</p>
           <button type="button" data-action="browse" class="${btn("")}">Examinar…</button>
         </div>
         `,
@@ -443,7 +533,7 @@ export function createApp(root) {
 
       return shell(
         `
-        ${titleBlock("Forma de organizar", "Elige cómo clasificar los archivos. Luego verás el preview por carpetas.")}
+        ${titleBlock("Forma de organizar", "Elige cómo clasificar los archivos. Luego verás la vista previa por carpetas.")}
         <div class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">${cards}</div>
         `,
         `<button type="button" data-action="back" class="${btn("")}">Atrás</button>`
@@ -453,7 +543,7 @@ export function createApp(root) {
     if (id === "org_config") {
       if (state.orgMethod === "date") {
         const choice =
-          "flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg border border-stone-300/70 bg-white px-4 py-4 text-sm font-medium text-stone-800 transition hover:border-stone-500 hover:bg-stone-50";
+          "flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg border border-stone-300/70 bg-white px-4 py-4 taxos-text-body font-medium text-stone-800 transition hover:border-stone-500 hover:bg-stone-50";
         return shell(
           `
           ${titleBlock("Por fecha", "Las carpetas usan la fecha de modificación del archivo.")}
@@ -481,12 +571,12 @@ export function createApp(root) {
         </label>
         <input id="org-terms" type="text" autocomplete="off"
           placeholder="${projects ? "Taxos, Informe" : "factura, contrato"}"
-          class="mt-2 w-full border-0 border-b border-stone-300 bg-transparent py-3 text-sm font-light text-stone-800 outline-none focus:border-stone-800" />
+          class="mt-2 w-full border-0 border-b border-stone-300 bg-transparent py-3 taxos-text-body font-light text-stone-800 outline-none focus:border-stone-800" />
         `,
         `
         <button type="button" data-action="back" class="${btn("")}">Atrás</button>
         <div class="ml-auto"></div>
-        <button type="button" data-action="org-config-next" class="${btn("", { primary: true })}">Ver preview</button>
+        <button type="button" data-action="org-config-next" class="${btn("", { primary: true })}">Ver vista previa</button>
         `
       );
     }
@@ -524,9 +614,9 @@ export function createApp(root) {
               <li>
                 <button type="button" data-expand="${escapeHtml(g.name)}"
                   class="flex w-full items-center gap-3 py-3.5 text-left transition hover:bg-stone-50/80 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300/50">
-                  ${groupIcon(g.kind)}
+                  ${groupIcon(g.kind, g.name)}
                   <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-medium text-stone-900">${escapeHtml(g.name)}</p>
+                    <p class="truncate taxos-text-body font-medium text-stone-900">${escapeHtml(g.name)}</p>
                     <p class="mt-0.5 text-xs font-light text-stone-500">${detail}</p>
                   </div>
                   ${svgIcon(iconChevronSvg, `text-stone-400 transition ${open ? "rotate-180" : ""}`)}
@@ -536,11 +626,11 @@ export function createApp(root) {
               })
               .join("")}
           </ul>`
-        : `<p class="mt-8 text-sm font-light text-stone-500">Nada que hacer en esta carpeta con la operación elegida.</p>`;
+        : `<p class="mt-8 taxos-text-body font-light text-stone-500">Nada que hacer en esta carpeta con la operación elegida.</p>`;
 
       return shell(
         `
-        ${titleBlock("Preview", "Resumen por carpeta antes de aplicar. Pulsa una carpeta para ver los archivos.")}
+        ${titleBlock("Vista previa", "Resumen por carpeta antes de aplicar. Pulsa una carpeta para ver los archivos.")}
         ${listHtml}
         `,
         `
@@ -567,17 +657,63 @@ export function createApp(root) {
       );
     }
 
+    if (id === "history") {
+      const batches = state.historyBatches || [];
+      const list = batches.length
+        ? `<ul class="mt-6 divide-y divide-stone-300/50 border-y border-stone-300/50">
+            ${batches
+              .map((batch) => {
+                const kindLabel = batch.kind === "clean" ? "Limpiar" : "Organizar";
+                const canUndo = Boolean(batch.can_undo);
+                const status = canUndo
+                  ? "Se puede deshacer"
+                  : batch.kind === "clean"
+                    ? "No deshacible desde Taxos"
+                    : "Ya deshecho o no disponible";
+                return `
+              <li>
+                <button type="button"
+                  data-history-ts="${escapeHtml(batch.timestamp || "")}"
+                  data-history-kind="${escapeHtml(batch.kind || "")}"
+                  data-history-can-undo="${canUndo ? "1" : "0"}"
+                  class="flex w-full flex-col gap-1 py-3.5 text-left transition hover:bg-stone-50/80 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300/50">
+                  <div class="flex items-center justify-between gap-3">
+                    <p class="taxos-text-body font-medium text-stone-900">${kindLabel}</p>
+                    <p class="shrink-0 text-xs font-light text-stone-500">${escapeHtml(formatBatchWhen(batch.timestamp))}</p>
+                  </div>
+                  <p class="text-xs font-light text-stone-600">
+                    ${escapeHtml(folderBasename(batch.root))} · ${batch.file_count || 0} archivo${(batch.file_count || 0) === 1 ? "" : "s"}
+                  </p>
+                  <p class="text-xs font-light ${canUndo ? "text-stone-500" : "text-stone-400"}">${status}</p>
+                </button>
+              </li>`;
+              })
+              .join("")}
+          </ul>`
+        : `<p class="mt-8 taxos-text-body font-light text-stone-500">Aún no hay operaciones en el historial.</p>`;
+
+      return shell(
+        `
+        ${titleBlock("Historial", "Organizaciones y limpiezas registradas. Solo se puede deshacer una organización.")}
+        ${list}
+        `,
+        `
+        <button type="button" data-action="back" class="${btn("")}">Atrás</button>
+        `
+      );
+    }
+
     if (id === "undo_confirm") {
       const preview = state.undoPreview || {};
       const lines = preview.lines || [];
       const list = lines.length
-        ? `<ul class="mt-6 max-h-48 space-y-1 overflow-y-auto border-y border-stone-300/50 py-3 text-sm font-light text-stone-600">
+        ? `<ul class="mt-6 max-h-48 space-y-1 overflow-y-auto border-y border-stone-300/50 py-3 taxos-text-body font-light text-stone-600">
             ${lines.map((line) => `<li class="truncate">${escapeHtml(line)}</li>`).join("")}
           </ul>`
         : "";
       const conflicts = preview.conflict_count || 0;
       const conflict = conflicts
-        ? `<p class="mt-3 text-sm font-light text-stone-600">Hay ${conflicts} ${
+        ? `<p class="mt-3 taxos-text-body font-light text-stone-600">Hay ${conflicts} ${
             conflicts === 1
               ? "archivo cuya ruta original está ocupada: se restaura con otro nombre."
               : "archivos cuya ruta original está ocupada: se restauran con otro nombre."
@@ -606,18 +742,14 @@ export function createApp(root) {
         `
         <button type="button" data-action="close" class="${btn("")}">Cerrar</button>
         <div class="ml-auto flex flex-wrap gap-2">
-          ${
-            state.canUndo
-              ? `<button type="button" data-action="undo" class="${btn("")}">Deshacer</button>`
-              : ""
-          }
+          ${historyButton()}
           <button type="button" data-action="again" class="${btn("", { primary: true })}">Realizar otra operación</button>
         </div>
         `
       );
     }
 
-    return shell(`<p class="text-sm text-stone-600">Slide desconocido.</p>`, "");
+    return shell(`<p class="taxos-text-body text-stone-600">Slide desconocido.</p>`, "");
   }
 
   function bind() {
@@ -722,22 +854,44 @@ export function createApp(root) {
       }
       state.resultMessage = res.message || "Operación terminada.";
       state.canUndo = Boolean(res.can_undo);
+      state.hasHistory = Boolean(res.has_history ?? true);
       go("done");
     });
 
-    root.querySelector('[data-action="undo"]')?.addEventListener("click", () => {
-      openUndo();
+    root.querySelector('[data-action="open-history"]')?.addEventListener("click", async () => {
+      await refreshHistory();
+      go("history");
+    });
+
+    root.querySelectorAll("[data-history-ts]").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const ts = el.getAttribute("data-history-ts") || "";
+        const kind = el.getAttribute("data-history-kind") || "";
+        const canUndo = el.getAttribute("data-history-can-undo") === "1";
+        if (kind === "clean" || !canUndo) {
+          state.error =
+            kind === "clean"
+              ? "La papelera no se restaura desde Taxos. Recupera los archivos desde la papelera del sistema."
+              : "Este lote ya no se puede deshacer.";
+          render({ animate: false });
+          return;
+        }
+        await openUndo(ts);
+      });
     });
 
     root.querySelector('[data-action="undo-apply"]')?.addEventListener("click", async () => {
-      const res = await withApi((api) => api.apply_undo());
+      const ts = state.undoTimestamp;
+      const res = await withApi((api) => api.apply_undo(ts || null));
       if (!res || res.ok === false) {
         state.error = (res && res.error) || "No se pudo deshacer.";
         render({ animate: false });
         return;
       }
       state.resultMessage = res.message || "Organización deshecha.";
-      state.canUndo = false;
+      state.canUndo = Boolean(res.can_undo);
+      state.hasHistory = Boolean(res.has_history);
+      state.undoTimestamp = null;
       go("done");
     });
 
@@ -752,6 +906,7 @@ export function createApp(root) {
       state.preview = { moveCount: 0, trashCount: 0, tagCount: 0, groups: [], lines: [] };
       state.expandedGroup = null;
       state.history = [];
+      state.undoTimestamp = null;
       await refreshUndo();
       go("choose_op", { push: false });
     });
@@ -770,8 +925,8 @@ export function createApp(root) {
     if (ready) go("preview");
   }
 
-  async function openUndo() {
-    const res = await withApi((api) => api.undo_preview());
+  async function openUndo(timestamp) {
+    const res = await withApi((api) => api.undo_preview(timestamp || null));
     if (!res || res.available === false) {
       state.error = "No hay una organización para deshacer.";
       state.canUndo = false;
@@ -779,6 +934,7 @@ export function createApp(root) {
       return;
     }
     state.undoPreview = res;
+    state.undoTimestamp = res.timestamp || timestamp || null;
     state.canUndo = true;
     go("undo_confirm");
   }

@@ -1,0 +1,15 @@
+---
+description: Privacidad y límites de la IA opcional
+globs: "**/ai.py,**/classifier.py"
+alwaysApply: false
+---
+
+# IA — Taxos
+
+## Límites
+
+- Opt-in (`--ai` / flag GUI); desactivada por defecto.
+- Solo nombres de archivo; nunca leer ni subir contenido.
+- Categorías permitidas = las del YAML (+ `other`); no inventar carpetas.
+- Sin `GROQ_API_KEY` o fallo de red → reglas locales offline.
+- Cap razonable de nombres por petición (p. ej. 100).

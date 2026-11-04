@@ -107,6 +107,12 @@ def _visible(entries: list[FileEntry]) -> list[FileEntry]:
     return [entry for entry in entries if not entry.name.startswith(".")]
 
 
+def _extension_folder(entry: FileEntry) -> str:
+    """Carpeta destino = sufijo en minúsculas sin punto; sin extensión → sin_extension."""
+    suffix = entry.suffix.lstrip(".").lower()
+    return suffix if suffix else "sin_extension"
+
+
 def _date_folder(moment: datetime, granularity: str) -> str:
     if granularity == "year":
         return f"{moment.year:04d}"
@@ -203,9 +209,8 @@ def assign_folders(
         return []
     if request.method == "extension":
         return [
-            (entry, category)
-            for entry, category in classify_all(entries, rules)
-            if not entry.name.startswith(".")
+            (entry, _extension_folder(entry))
+            for entry in _visible(entries)
         ]
     if request.method == "date":
         return [

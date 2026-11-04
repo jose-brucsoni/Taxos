@@ -1,0 +1,19 @@
+---
+description: Puente GUI PyWebView + Vite/Tailwind
+globs: "**/gui/**/*.py,ui/**/*.{js,css,html}"
+alwaysApply: false
+---
+
+# GUI — Taxos
+
+## Arquitectura
+
+- UI en `ui/` (Vite + Tailwind) habla solo vía `window.pywebview.api` → `TaxosApi` (`src/taxos/gui/api.py`).
+- Lógica de organización en Python (`organize_modes`, `organizer`), no en `ui/src/app.js`.
+- Mantener sync: `ORG_METHODS` en JS ↔ `ENABLED_METHODS` / `COMING_SOON_METHODS` en Python.
+- `content` y `rules` desactivados (fuera de alcance); no implementar sin pedirlo.
+
+## Dev y build
+
+- Hot-reload: `TAXOS_UI_DEV=1` + `npm run dev` en `ui/`.
+- Producción: `npm run build` en `ui/`; empaquetado con `scripts/build_windows.ps1` / `build_linux.sh`.

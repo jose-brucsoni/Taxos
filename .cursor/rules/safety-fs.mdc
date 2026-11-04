@@ -1,0 +1,20 @@
+---
+description: Seguridad al mutar el sistema de archivos
+globs: "**/organizer.py,**/cleaner.py,**/undo.py,**/watcher.py,**/history.py,**/organize_modes.py"
+alwaysApply: false
+---
+
+# FS seguro — Taxos
+
+## Mutaciones
+
+- Construir plan / preview antes de apply.
+- Historial append-only (`history.jsonl` vía platformdirs); no reescribir el log.
+- Colisiones de destino: usar destinos únicos (`_unique_dest`), no sobrescribir.
+- Borrar solo con `send2trash`; nunca `unlink` irreversible por defecto.
+
+## Alcance
+
+- Operar solo dentro de la raíz elegida (Descargas o `--path`).
+- Watch: esperar settle del archivo antes de mover.
+- Undo restaura desde el último lote reversible del historial.

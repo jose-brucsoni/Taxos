@@ -3,16 +3,32 @@
 @theme {
   --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
   --font-sans: "Outfit", ui-sans-serif, sans-serif;
+  --text-body: clamp(0.875rem, 0.8rem + 0.35vw, 1.125rem);
+  --text-title: clamp(1.35rem, 1.1rem + 1.2vw, 2.25rem);
+  --text-hero: clamp(1.75rem, 1.2rem + 2vw, 3rem);
 }
 
 body {
   font-family: var(--font-sans);
   background: #ffffff;
   min-height: 100vh;
+  font-size: var(--text-body);
 }
 
 .font-display {
   font-family: var(--font-display);
+}
+
+.taxos-text-body {
+  font-size: var(--text-body);
+}
+
+.taxos-text-title {
+  font-size: var(--text-title);
+}
+
+.taxos-text-hero {
+  font-size: var(--text-hero);
 }
 
 @keyframes taxos-progress {
@@ -58,4 +74,110 @@ body {
 
 .taxos-slide-enter {
   animation: taxos-slide-in 260ms ease-out both;
+}
+
+@keyframes taxos-welcome-taxonomy {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  8% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes taxos-welcome-brand {
+  0%,
+  88% {
+    opacity: 0;
+    transform: scale(0.94);
+    pointer-events: none;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+  }
+}
+
+.taxos-welcome {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.taxos-welcome-phase {
+  display: flex;
+  width: 100%;
+  max-width: 32rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+.taxos-welcome-phase-taxonomy {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: flex;
+  max-width: 32rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  animation: taxos-welcome-taxonomy 6s ease-in-out both;
+}
+
+.taxos-welcome-phase-brand {
+  position: relative;
+  z-index: 1;
+  animation: taxos-welcome-brand 6s ease-out both;
+}
+
+.taxos-welcome-reduced .taxos-welcome-phase-taxonomy {
+  display: none;
+}
+
+.taxos-welcome-reduced .taxos-welcome-phase-brand {
+  animation: none;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .taxos-welcome-phase-taxonomy {
+    display: none;
+  }
+
+  .taxos-welcome-phase-brand {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .taxos-slide-enter {
+    animation: none;
+  }
 }

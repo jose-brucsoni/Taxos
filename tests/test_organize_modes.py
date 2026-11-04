@@ -28,14 +28,27 @@ def _folders(root: Path, names: list[tuple[str, datetime]], request: OrganizeReq
     return {action.src.name: action.dest.parent.name for action in actions}
 
 
-def test_extension_uses_rules_and_skips_dotfiles(tmp_path: Path) -> None:
+def test_extension_uses_suffix_and_skips_dotfiles(tmp_path: Path) -> None:
     when = datetime(2024, 1, 2, 3, 4)
     folders = _folders(
         tmp_path,
-        [("foto.jpg", when), ("nota.txt", when), (".oculto.jpg", when)],
+        [
+            ("foto.jpg", when),
+            ("nota.txt", when),
+            ("Informe.PDF", when),
+            ("contrato.DOCX", when),
+            ("sin_ext", when),
+            (".oculto.jpg", when),
+        ],
         OrganizeRequest(method="extension"),
     )
-    assert folders == {"foto.jpg": "images", "nota.txt": "documents"}
+    assert folders == {
+        "foto.jpg": "jpg",
+        "nota.txt": "txt",
+        "Informe.PDF": "pdf",
+        "contrato.DOCX": "docx",
+        "sin_ext": "sin_extension",
+    }
 
 
 def test_date_granularity(tmp_path: Path) -> None:

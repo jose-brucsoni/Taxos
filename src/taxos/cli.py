@@ -176,7 +176,7 @@ def organize(
 
     created: list[Path] = []
     done = apply_plan(actions, created)
-    log_path = append_organize_batch(done, created)
+    log_path = append_organize_batch(done, created, root=target)
     console.print(f"[green]Movidos:[/green] {len(done)} / {len(actions)}")
     console.print(f"[bold]Log:[/bold] {log_path}")
 
@@ -232,7 +232,7 @@ def clean(
         raise typer.Exit(code=0)
 
     done = apply_trash(candidates)
-    log_path = append_trash(done)
+    log_path = append_trash(done, root=target)
     console.print(f"[green]A papelera:[/green] {len(done)} / {len(candidates)}")
     console.print(f"[bold]Log:[/bold] {log_path}")
 
@@ -286,7 +286,8 @@ def undo(
     if not outcome.did_something:
         console.print("[yellow]Nada que deshacer.[/yellow]")
         return
-    log_path = append_undos(outcome.restored) if outcome.restored else None
+    batch_ts = str(batch[0].get("timestamp") or "") if batch else ""
+    log_path = append_undos(outcome.restored, batch_timestamp=batch_ts or None)
     conflicts = sum(1 for action in outcome.restored if action.conflict)
     console.print(
         f"[green]Restaurados:[/green] {len(outcome.restored)} / {len(summary.actions)}"

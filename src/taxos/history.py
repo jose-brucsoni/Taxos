@@ -52,10 +52,32 @@ def append_organize_batch(
     tags_path: Path | None = None,
     tags_previous: str | None = None,
     tags_written: bool = False,
+    tag_count: int = 0,
+    root: Path | str | None = None,
+    method: str | None = None,
 ) -> Path:
-    """Registra carpetas creadas, movimientos y etiquetas con el mismo timestamp."""
+    """Registra resumen del lote, carpetas creadas, movimientos y etiquetas."""
     now = _now()
     records: list[dict[str, Any]] = []
+
+    root_str = str(root) if root else ""
+    if not root_str and actions:
+        root_str = str(actions[0].src.parent)
+    if not root_str and tags_path is not None:
+        root_str = str(Path(tags_path).parent)
+
+    file_count = len(actions) + (tag_count if tags_written else 0)
+    records.append(
+        {
+            "timestamp": now,
+            "action": "batch",
+            "kind": "organize",
+            "root": root_str,
+            "file_count": file_count,
+            "method": method or "",
+        }
+    )
+
     for directory in created_dirs or []:
         records.append(
             {
@@ -82,15 +104,32 @@ def append_organize_batch(
                 "previous": tags_previous,
             }
         )
-    if not records:
+    if len(records) == 1 and file_count == 0:
         return history_file()
     return _append_records(records)
 
 
-def append_trash(candidates: list[TrashCandidate]) -> Path:
-    """Añade una línea JSON por archivo enviado a papelera."""
+def append_trash(
+    candidates: list[TrashCandidate],
+    *,
+    root: Path | str | None = None,
+) -> Path:
+    """Añade resumen del lote y una línea JSON por archivo enviado a papelera."""
     now = _now()
-    records = [
+    root_str = str(root) if root else ""
+    if not root_str and candidates:
+        root_str = str(candidates[0].path.parent)
+    records: list[dict[str, Any]] = [
+        {
+            "timestamp": now,
+            "action": "batch",
+            "kind": "clean",
+            "root": root_str,
+            "file_count": len(candidates),
+            "method": "",
+        }
+    ]
+    records.extend(
         {
             "timestamp": now,
             "action": "trash",
@@ -98,14 +137,27 @@ def append_trash(candidates: list[TrashCandidate]) -> Path:
             "reason": candidate.reason,
         }
         for candidate in candidates
-    ]
+    )
     return _append_records(records)
 
 
-def append_undos(actions: list[MoveAction]) -> Path:
-    """Añade una línea JSON por deshacer (dest→src restaurado)."""
+def append_undos(
+    actions: list[MoveAction],
+    *,
+    batch_timestamp: str | None = None,
+) -> Path:
+    """Añade deshacer (dest→src) y, si aplica, marca el lote como deshecho."""
     now = _now()
-    records = [
+    records: list[dict[str, Any]] = []
+    if batch_timestamp:
+        records.append(
+            {
+                "timestamp": now,
+                "action": "batch_undone",
+                "undone_timestamp": batch_timestamp,
+            }
+        )
+    records.extend(
         {
             "timestamp": now,
             "action": "undo",
@@ -113,7 +165,9 @@ def append_undos(actions: list[MoveAction]) -> Path:
             "dest": str(action.dest),
         }
         for action in actions
-    ]
+    )
+    if not records:
+        return history_file()
     return _append_records(records)
 
 
@@ -153,16 +207,125 @@ def last_move_batch() -> list[dict[str, Any]]:
 def last_reversible_batch() -> list[dict[str, Any]]:
     """Último lote que se puede deshacer: movimientos y/o etiquetas, con sus mkdir."""
     records = read_records()
+    undone = {
+        record.get("undone_timestamp")
+        for record in records
+        if record.get("action") == "batch_undone" and record.get("undone_timestamp")
+    }
     last_ts = None
     for record in reversed(records):
-        if record.get("action") in {"move", "tags"}:
-            last_ts = record.get("timestamp")
-            break
+        if record.get("action") not in {"move", "tags"}:
+            continue
+        ts = record.get("timestamp")
+        if ts in undone:
+            continue
+        last_ts = ts
+        break
     if last_ts is None:
+        return []
+    return reversible_batch_at(last_ts)
+
+
+def reversible_batch_at(timestamp: str) -> list[dict[str, Any]]:
+    """Registros revertibles (move/mkdir/tags) de un timestamp concreto."""
+    if not timestamp:
         return []
     return [
         record
-        for record in records
-        if record.get("timestamp") == last_ts
+        for record in read_records()
+        if record.get("timestamp") == timestamp
         and record.get("action") in {"move", "mkdir", "tags"}
     ]
+
+
+def _undone_timestamps(records: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(record.get("undone_timestamp"))
+        for record in records
+        if record.get("action") == "batch_undone" and record.get("undone_timestamp")
+    }
+
+
+def list_history_batches() -> list[dict[str, Any]]:
+    """Lotes de historial (más reciente primero): organize y clean."""
+    from taxos.undo import summarize_batch
+
+    records = read_records()
+    undone = _undone_timestamps(records)
+    explicit = [record for record in records if record.get("action") == "batch"]
+
+    if explicit:
+        batches: list[dict[str, Any]] = []
+        for record in reversed(explicit):
+            ts = str(record.get("timestamp") or "")
+            kind = str(record.get("kind") or "organize")
+            can_undo = False
+            if kind == "organize" and ts and ts not in undone:
+                can_undo = summarize_batch(reversible_batch_at(ts)).available
+            batches.append(
+                {
+                    "timestamp": ts,
+                    "kind": kind,
+                    "root": str(record.get("root") or ""),
+                    "file_count": int(record.get("file_count") or 0),
+                    "method": str(record.get("method") or ""),
+                    "can_undo": can_undo,
+                }
+            )
+        return batches
+
+    # Compatibilidad con historial antiguo sin action=batch
+    return _legacy_history_batches(records, undone)
+
+
+def _legacy_history_batches(
+    records: list[dict[str, Any]],
+    undone: set[str],
+) -> list[dict[str, Any]]:
+    from taxos.undo import summarize_batch
+
+    seen: set[str] = set()
+    batches: list[dict[str, Any]] = []
+    for record in reversed(records):
+        action = record.get("action")
+        ts = str(record.get("timestamp") or "")
+        if not ts or ts in seen:
+            continue
+        if action in {"move", "tags", "mkdir"}:
+            seen.add(ts)
+            batch = reversible_batch_at(ts)
+            moves = [r for r in batch if r.get("action") == "move"]
+            tags = [r for r in batch if r.get("action") == "tags"]
+            root = ""
+            if moves:
+                root = str(Path(str(moves[0].get("src", ""))).parent)
+            elif tags:
+                root = str(Path(str(tags[0].get("path", ""))).parent)
+            can_undo = ts not in undone and summarize_batch(batch).available
+            batches.append(
+                {
+                    "timestamp": ts,
+                    "kind": "organize",
+                    "root": root,
+                    "file_count": len(moves) + len(tags),
+                    "method": "",
+                    "can_undo": can_undo,
+                }
+            )
+        elif action == "trash":
+            seen.add(ts)
+            trash = [r for r in records if r.get("timestamp") == ts and r.get("action") == "trash"]
+            root = ""
+            if trash:
+                root = str(Path(str(trash[0].get("src", ""))).parent)
+            batches.append(
+                {
+                    "timestamp": ts,
+                    "kind": "clean",
+                    "root": root,
+                    "file_count": len(trash),
+                    "method": "",
+                    "can_undo": False,
+                }
+            )
+    return batches
