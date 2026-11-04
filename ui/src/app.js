@@ -1,6 +1,5 @@
 import iconFolders from "./icons/folders.svg?raw";
 import iconTrashSvg from "./icons/trash-2.svg?raw";
-import iconLayers from "./icons/layers.svg?raw";
 import iconSearch from "./icons/search.svg?raw";
 import iconFiles from "./icons/files.svg?raw";
 import iconCalendar from "./icons/calendar.svg?raw";
@@ -199,6 +198,8 @@ export function createApp(root) {
     expandedGroup: null,
     resultMessage: "Operación terminada.",
     busy: false,
+    busyMessage: "",
+    busyLock: false,
     error: "",
     api: null,
     canUndo: false,
@@ -209,6 +210,19 @@ export function createApp(root) {
     tutorialSeen: false,
     previewTipSeen: false,
     undoTipSeen: false,
+    doSearch: false,
+    cleanItems: [],
+    cleanSortBy: "name",
+    cleanSortReverse: false,
+    searchScope: "folder",
+    searchMode: "name",
+    searchName: "",
+    searchExt: "",
+    searchHits: [],
+    searchRoot: "",
+    searchTruncated: false,
+    cleanRoots: [],
+    cleanTotalLabel: "",
   };
 
   async function markFlag(name) {
@@ -255,25 +269,65 @@ export function createApp(root) {
     render({ animate: true });
   }
 
-  async function withApi(fn) {
+  async function withApi(fn, { message } = {}) {
     if (!state.api) {
       state.error = "API no lista.";
       render();
       return null;
     }
-    state.busy = true;
-    state.error = "";
-    render();
+    const outer = !state.busyLock;
+    if (outer) {
+      state.busy = true;
+      state.busyMessage = message || "Trabajando…";
+      state.error = "";
+      render({ animate: false });
+    } else if (message) {
+      state.busyMessage = message;
+      render({ animate: false });
+    }
     try {
       return await fn(state.api);
     } catch (err) {
       state.error = String(err?.message || err);
-      render();
+      render({ animate: false });
       return null;
     } finally {
-      state.busy = false;
-      render();
+      if (outer) {
+        state.busy = false;
+        state.busyMessage = "";
+        render({ animate: false });
+      }
     }
+  }
+
+  async function runBusy(message, asyncFn) {
+    state.busy = true;
+    state.busyMessage = message || "Trabajando…";
+    state.busyLock = true;
+    state.error = "";
+    render({ animate: false });
+    try {
+      return await asyncFn();
+    } finally {
+      state.busyLock = false;
+      state.busy = false;
+      state.busyMessage = "";
+      render({ animate: false });
+    }
+  }
+
+  function busyOverlayHtml() {
+    if (!state.busy) return "";
+    const msg = escapeHtml(state.busyMessage || "Trabajando…");
+    return `
+      <div class="taxos-busy-overlay" role="status" aria-live="polite" aria-busy="true">
+        <div class="taxos-busy-panel">
+          <p class="font-display taxos-text-title font-medium tracking-tight text-stone-900">${msg}</p>
+          <div class="mx-auto mt-8 h-px w-48 overflow-hidden bg-stone-300/80" role="progressbar" aria-valuetext="${msg}">
+            <div class="taxos-progress-bar h-full w-1/3 bg-stone-800"></div>
+          </div>
+        </div>
+      </div>`;
   }
 
   async function refreshUndo() {
@@ -332,10 +386,10 @@ export function createApp(root) {
     `;
   }
 
-  function heroSlide({ title, imageSrc, imageAlt = "", subtitle, footerHtml, extraHtml = "", step = null }) {
+  function heroSlide({ title, imageSrc, imageAlt = "", subtitle, footerHtml, extraHtml = "", step = null, stepTotal = 2 }) {
     const stepHtml =
       step != null
-        ? `<p class="mt-2 text-xs font-medium uppercase tracking-wider text-stone-400">Paso ${step} de 3</p>`
+        ? `<p class="mt-2 text-xs font-medium uppercase tracking-wider text-stone-400">Paso ${step} de ${stepTotal}</p>`
         : "";
     return `
       <div class="flex min-h-screen w-full flex-col items-center justify-center bg-white px-6 py-8 sm:px-10">
@@ -428,7 +482,7 @@ export function createApp(root) {
         imageSrc: "./illustrations/goal.svg",
         imageAlt: "Ilustración de una meta",
         subtitle:
-          "Nada se mueve ni se borra sin una vista previa y tu confirmación. Taxos ordena una carpeta y puede enviar sobrantes a la papelera (no los elimina para siempre).",
+          "Nada se mueve ni se borra sin vista previa y tu confirmación. Puedes organizar una carpeta, limpiar temps/caché del usuario o buscar archivos.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
           <button type="button" data-go="choose_op" class="${btn("")}">Empezar ahora</button>
@@ -459,22 +513,7 @@ export function createApp(root) {
         imageSrc: "./illustrations/inbox-cleanup.svg",
         imageAlt: "Ilustración de una bandeja que se limpia",
         subtitle:
-          "Envía a la papelera archivos vacíos, temporales o restos de programas. Puedes recuperarlos desde la papelera del sistema.",
-        footerHtml: `
-          <button type="button" data-action="back" class="${btn("")}">Atrás</button>
-          <button type="button" data-go="tut_both" class="${btn("", { primary: true })}">Siguiente</button>
-        `,
-      });
-    }
-
-    if (id === "tut_both") {
-      return heroSlide({
-        title: "Organizar y eliminar",
-        step: 3,
-        imageSrc: "./illustrations/completed-tasks.svg",
-        imageAlt: "Ilustración de tareas terminadas",
-        subtitle:
-          "Puedes ordenar y limpiar a la vez. Antes de aplicar, Taxos siempre muestra el plan para que confirmes.",
+          "Escanea temps y caché de tu usuario, propone basura típica de tu sistema y tú marcas qué enviar a la papelera. Nada se borra sin confirmar.",
         footerHtml: `
           <button type="button" data-action="back" class="${btn("")}">Atrás</button>
           <button type="button" data-go="choose_op" class="${btn("", { primary: true })}">Elegir operación</button>
@@ -484,9 +523,7 @@ export function createApp(root) {
 
     if (id === "choose_op") {
       const cell =
-        "flex min-h-[6.5rem] flex-col items-center justify-center gap-2 rounded-lg border border-stone-300/60 bg-white px-3 py-4 taxos-text-body font-medium tracking-wide text-stone-800 transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-400/30";
-      const cellMuted =
-        "flex min-h-[6.5rem] cursor-not-allowed flex-col items-center justify-center gap-1 rounded-lg border border-stone-200/80 bg-stone-100/50 px-3 py-4 taxos-text-body font-medium tracking-wide text-stone-400";
+        "flex w-full min-h-[5.5rem] flex-col items-center justify-center gap-2 rounded-lg border border-stone-300/60 bg-white px-4 py-5 taxos-text-body font-medium tracking-wide text-stone-800 transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-400/30";
       const option = (op, label, icon) => `
         <button type="button" data-op="${op}" class="${cell}">
           ${svgIcon(icon, "text-stone-600")}
@@ -494,16 +531,13 @@ export function createApp(root) {
         </button>`;
       return shell(
         `
-        ${titleBlock("Elegir operación", "¿Qué quieres hacer en esta pasada?")}
-        <div class="mt-8 grid grid-cols-2 gap-3">
-          ${option("organize", "Organizar", iconFolders)}
-          ${option("clean", "Eliminar", iconTrashSvg)}
-          ${option("both", "Ambos", iconLayers)}
-          <button type="button" disabled class="${cellMuted}" title="Próximamente">
-            ${svgIcon(iconSearch, "text-stone-300")}
-            <span>Buscar</span>
-            <span class="text-[10px] font-light uppercase tracking-wider">Próximamente</span>
-          </button>
+        <div class="flex flex-1 flex-col items-center justify-center py-6">
+          ${titleBlock("Elegir operación", "¿Qué quieres hacer?")}
+          <div class="mt-10 flex w-full max-w-sm flex-col gap-3">
+            ${option("organize", "Organizar", iconFolders)}
+            ${option("clean", "Eliminar", iconTrashSvg)}
+            ${option("search", "Buscar", iconSearch)}
+          </div>
         </div>
         `,
         `
@@ -676,19 +710,183 @@ export function createApp(root) {
         `
         <button type="button" data-action="back" class="${btn("")}">Atrás</button>
         <div class="ml-auto"></div>
-        <button type="button" data-go="confirm" class="${btn("", { primary: true })}" ${state.busy ? "disabled" : ""}>Continuar</button>
+        <button type="button" data-action="preview-next" class="${btn("", { primary: true })}" ${state.busy ? "disabled" : ""}>Continuar</button>
+        `
+      );
+    }
+
+    if (id === "clean_select") {
+      const selectedCount = state.cleanItems.filter((i) => i.selected).length;
+      const sortOpts = [
+        ["name", "Nombre"],
+        ["size", "Tamaño"],
+        ["extension", "Extensión"],
+        ["reason", "Motivo"],
+      ]
+        .map(
+          ([value, label]) =>
+            `<option value="${value}" ${state.cleanSortBy === value ? "selected" : ""}>${label}</option>`
+        )
+        .join("");
+      const rows = state.cleanItems.length
+        ? state.cleanItems
+            .map(
+              (item) => `
+            <label class="taxos-clean-row flex items-start gap-3 border-b border-stone-200/80 py-3">
+              <input type="checkbox" data-clean-path="${escapeHtml(item.path)}" class="mt-1" ${item.selected ? "checked" : ""} />
+              <span class="min-w-0 flex-1">
+                <span class="block taxos-text-body font-medium text-stone-900 truncate">${escapeHtml(item.name)}</span>
+                <span class="block text-xs font-light text-stone-500 truncate">${escapeHtml(item.rel_path)}</span>
+                <span class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-light text-stone-600">
+                  <span>.${escapeHtml(item.extension || "—")}</span>
+                  <span>${escapeHtml(item.size_label)}</span>
+                  <span>${escapeHtml(item.reason)}</span>
+                </span>
+              </span>
+            </label>`
+            )
+            .join("")
+        : `<p class="mt-6 taxos-text-body font-light text-stone-500">No se encontró basura conocida en temps/caché.</p>`;
+      const rootsLabel = (state.cleanRoots || []).length
+        ? state.cleanRoots.map((r) => escapeHtml(r)).join(" · ")
+        : "temps y caché del usuario";
+
+      return shell(
+        `
+        ${titleBlock("Eliminar", "Marca qué enviar a la papelera. Puedes ordenar la lista.")}
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <label class="text-xs font-medium uppercase tracking-wider text-stone-500">
+            Ordenar
+            <select data-clean-sort class="ml-2 rounded border border-stone-300 bg-white px-2 py-1 text-sm font-normal normal-case tracking-normal text-stone-800">
+              ${sortOpts}
+            </select>
+          </label>
+          <button type="button" data-action="clean-sort-dir" class="${btn("")}">${state.cleanSortReverse ? "Desc" : "Asc"}</button>
+          <button type="button" data-action="clean-select-all" class="${btn("")}">Todos</button>
+          <button type="button" data-action="clean-select-none" class="${btn("")}">Ninguno</button>
+          <span class="ml-auto text-xs font-light text-stone-500">${selectedCount} / ${state.cleanItems.length}${state.cleanTotalLabel ? ` · ${escapeHtml(state.cleanTotalLabel)}` : ""}</span>
+        </div>
+        <div class="mt-2 max-h-[40vh] overflow-y-auto border-y border-stone-300/50">${rows}</div>
+        <aside class="taxos-clean-explain mt-6" role="note">
+          <p><strong>Por qué:</strong> coinciden con basura típica de este sistema (temporales, vacíos, locks…).</p>
+          <p><strong>Objetivo:</strong> liberar espacio y reducir ruido en cachés y carpetas temporales del usuario.</p>
+          <p><strong>Lugar:</strong> ${rootsLabel}</p>
+          <p><strong>Qué mejora:</strong> menos archivos basura; no se tocan programas del sistema; todo va a la papelera (recuperable).</p>
+        </aside>
+        `,
+        `
+        <button type="button" data-action="back" class="${btn("")}">Atrás</button>
+        <div class="ml-auto"></div>
+        <button type="button" data-action="clean-next" class="${btn("", { primary: true })}" ${selectedCount < 1 && state.cleanItems.length ? "disabled" : ""} ${state.busy ? "disabled" : ""}>
+          ${state.cleanItems.length ? "Continuar" : "Volver"}
+        </button>
+        `
+      );
+    }
+
+    if (id === "search_scope") {
+      const cell =
+        "flex min-h-[5.5rem] flex-col items-center justify-center gap-2 rounded-lg border border-stone-300/60 bg-white px-3 py-4 taxos-text-body font-medium tracking-wide text-stone-800 transition hover:border-stone-400 hover:bg-stone-50";
+      return shell(
+        `
+        ${titleBlock("Buscar", "¿Dónde quieres buscar? Solo archivos de tu usuario, no del sistema.")}
+        <div class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button type="button" data-action="search-scope-folder" class="${cell}">Carpeta concreta</button>
+          <button type="button" data-action="search-scope-all" class="${cell}">Buscar en toda la PC</button>
+        </div>
+        `,
+        `<button type="button" data-action="back" class="${btn("")}">Atrás</button>`
+      );
+    }
+
+    if (id === "search_query") {
+      const modeBtn = (mode, label) => {
+        const active = state.searchMode === mode;
+        return `<button type="button" data-search-mode="${mode}" class="${btn("", { primary: active })}">${label}</button>`;
+      };
+      const field =
+        state.searchMode === "extension"
+          ? `<label class="block">
+              <span class="text-xs font-medium uppercase tracking-wider text-stone-500">Extensión</span>
+              <input type="text" id="search-ext" value="${escapeHtml(state.searchExt)}" class="mt-1 w-full border-b border-stone-300 bg-transparent py-2 taxos-text-body text-stone-800 outline-none focus:border-stone-600" placeholder="p. ej. pdf" />
+            </label>`
+          : `<label class="block">
+              <span class="text-xs font-medium uppercase tracking-wider text-stone-500">Nombre contiene</span>
+              <input type="text" id="search-name" value="${escapeHtml(state.searchName)}" class="mt-1 w-full border-b border-stone-300 bg-transparent py-2 taxos-text-body text-stone-800 outline-none focus:border-stone-600" placeholder="p. ej. factura" />
+            </label>`;
+      return shell(
+        `
+        ${titleBlock("Criterios", "Elige cómo buscar. No se lee el contenido de los archivos.")}
+        <div class="mt-6 flex flex-wrap gap-2">
+          ${modeBtn("name", "Por nombre")}
+          ${modeBtn("extension", "Por extensión")}
+        </div>
+        <div class="mt-6 space-y-4">
+          ${field}
+          ${
+            state.searchScope === "all_user"
+              ? `<p class="text-xs font-light text-stone-500">Ámbito: perfil de usuario (toda la PC de usuario).</p>`
+              : `<p class="text-xs font-light text-stone-500 break-all">Ámbito: ${escapeHtml(state.folder || "—")}</p>`
+          }
+        </div>
+        `,
+        `
+        <button type="button" data-action="back" class="${btn("")}">Atrás</button>
+        <div class="ml-auto"></div>
+        <button type="button" data-action="search-run" class="${btn("", { primary: true })}" ${state.busy ? "disabled" : ""}>Buscar</button>
+        `
+      );
+    }
+
+    if (id === "search_results") {
+      const list = state.searchHits.length
+        ? `<ul class="mt-6 max-h-[50vh] divide-y divide-stone-200/80 overflow-y-auto border-y border-stone-300/50">
+            ${state.searchHits
+              .map(
+                (hit) => `
+              <li class="flex items-start justify-between gap-3 py-3">
+                <div class="min-w-0">
+                  <p class="taxos-text-body font-medium text-stone-900 truncate">${escapeHtml(hit.name)}</p>
+                  <p class="text-xs font-light text-stone-500 break-all">${escapeHtml(hit.parent)}</p>
+                  <p class="mt-1 text-xs font-light text-stone-600">${escapeHtml(hit.size_label)} · .${escapeHtml(hit.extension || "—")}</p>
+                </div>
+                <button type="button" data-reveal="${escapeHtml(hit.path)}" class="${btn("")}">Ver ubicación</button>
+              </li>`
+              )
+              .join("")}
+          </ul>`
+        : `<p class="mt-8 taxos-text-body font-light text-stone-500">Sin coincidencias.</p>`;
+      const note = state.searchTruncated
+        ? `<p class="mt-2 text-xs font-light text-stone-500">Se alcanzó el límite de resultados.</p>`
+        : "";
+      return shell(
+        `
+        ${titleBlock("Resultados", `${state.searchHits.length} archivo(s) en ${state.searchRoot || "—"}.`)}
+        ${note}
+        ${list}
+        `,
+        `
+        <button type="button" data-action="back" class="${btn("")}">Atrás</button>
+        <div class="ml-auto"></div>
+        <button type="button" data-action="again" class="${btn("", { primary: true })}">Otra operación</button>
         `
       );
     }
 
     if (id === "confirm") {
       const tagged = state.preview.tagCount || 0;
-      const extra = tagged ? ` Se etiquetarán ${tagged} archivo(s), sin moverlos.` : "";
+      const trashCount = state.doClean
+        ? state.cleanItems.filter((i) => i.selected).length
+        : 0;
+      let summary;
+      if (state.doClean && !state.doOrganize) {
+        summary = `Se enviarán ${trashCount} archivo(s) a la papelera. ¿Confirmas?`;
+      } else {
+        const extra = tagged ? ` Se etiquetarán ${tagged} archivo(s), sin moverlos.` : "";
+        summary = `Se van a mover ${state.preview.moveCount} archivo(s).${extra} ¿Confirmas aplicar el plan?`;
+      }
       return shell(
-        titleBlock(
-          "Confirmación",
-          `Se van a mover ${state.preview.moveCount} archivo(s) y enviar ${state.preview.trashCount} a la papelera.${extra} ¿Confirmas aplicar el plan?`
-        ),
+        titleBlock("Confirmación", summary),
         `
         <button type="button" data-action="confirm-no" class="${btn("")}">No</button>
         <div class="ml-auto"></div>
@@ -824,7 +1022,124 @@ export function createApp(root) {
     });
 
     root.querySelector('[data-action="confirm-no"]')?.addEventListener("click", () => {
-      go("preview", { push: false });
+      if (state.doClean) {
+        go("clean_select", { push: false });
+      } else {
+        go("preview", { push: false });
+      }
+    });
+
+    root.querySelector('[data-action="preview-next"]')?.addEventListener("click", () => {
+      go("confirm");
+    });
+
+    root.querySelector("[data-clean-sort]")?.addEventListener("change", async (ev) => {
+      state.cleanSortBy = ev.target.value || "name";
+      await loadCleanPreview({ updating: true });
+      render({ animate: false });
+    });
+
+    root.querySelector('[data-action="clean-sort-dir"]')?.addEventListener("click", async () => {
+      state.cleanSortReverse = !state.cleanSortReverse;
+      await loadCleanPreview({ updating: true });
+      render({ animate: false });
+    });
+
+    root.querySelectorAll("[data-clean-path]").forEach((el) => {
+      el.addEventListener("change", () => {
+        const path = el.getAttribute("data-clean-path");
+        const item = state.cleanItems.find((i) => i.path === path);
+        if (item) item.selected = Boolean(el.checked);
+        render({ animate: false });
+      });
+    });
+
+    root.querySelector('[data-action="clean-select-all"]')?.addEventListener("click", () => {
+      state.cleanItems.forEach((i) => {
+        i.selected = true;
+      });
+      render({ animate: false });
+    });
+
+    root.querySelector('[data-action="clean-select-none"]')?.addEventListener("click", () => {
+      state.cleanItems.forEach((i) => {
+        i.selected = false;
+      });
+      render({ animate: false });
+    });
+
+    root.querySelector('[data-action="clean-next"]')?.addEventListener("click", async () => {
+      const selected = state.cleanItems.filter((i) => i.selected).map((i) => i.path);
+      if (!state.cleanItems.length) {
+        go("choose_op", { push: false });
+        return;
+      }
+      if (selected.length === 0) {
+        state.error = "Marca al menos un archivo o pulsa Atrás.";
+        render({ animate: false });
+        return;
+      }
+      await withApi((api) => api.set_clean_selection(selected));
+      state.preview.trashCount = selected.length;
+      go("confirm");
+    });
+
+    root.querySelectorAll("[data-search-mode]").forEach((el) => {
+      el.addEventListener("click", () => {
+        state.searchMode = el.getAttribute("data-search-mode") || "name";
+        render({ animate: false });
+      });
+    });
+
+    root.querySelector('[data-action="search-scope-folder"]')?.addEventListener("click", () => {
+      state.searchScope = "folder";
+      go("folder");
+    });
+
+    root.querySelector('[data-action="search-scope-all"]')?.addEventListener("click", () => {
+      state.searchScope = "all_user";
+      go("search_query");
+    });
+
+    root.querySelector('[data-action="search-run"]')?.addEventListener("click", async () => {
+      if (state.searchMode === "extension") {
+        state.searchExt = root.querySelector("#search-ext")?.value || "";
+        state.searchName = "";
+        if (!state.searchExt.trim()) {
+          state.error = "Indica una extensión.";
+          render({ animate: false });
+          return;
+        }
+      } else {
+        state.searchName = root.querySelector("#search-name")?.value || "";
+        state.searchExt = "";
+        if (!state.searchName.trim()) {
+          state.error = "Indica un texto para el nombre.";
+          render({ animate: false });
+          return;
+        }
+      }
+      const res = await withApi(
+        (api) => api.search_files(state.searchName, state.searchExt, state.searchScope, 500),
+        { message: "Buscando archivos…" }
+      );
+      if (!res) return;
+      if (res.ok === false) {
+        state.error = res.error || "No se pudo buscar.";
+        render({ animate: false });
+        return;
+      }
+      state.searchHits = res.hits || [];
+      state.searchRoot = res.root || "";
+      state.searchTruncated = Boolean(res.truncated);
+      go("search_results");
+    });
+
+    root.querySelectorAll("[data-reveal]").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const path = el.getAttribute("data-reveal");
+        await withApi((api) => api.reveal_path(path));
+      });
     });
 
     root.querySelectorAll("[data-expand]").forEach((el) => {
@@ -862,18 +1177,30 @@ export function createApp(root) {
     root.querySelectorAll("[data-op]").forEach((el) => {
       el.addEventListener("click", async () => {
         const kind = el.getAttribute("data-op");
-        await withApi((api) => api.set_operation(kind));
-        if (kind === "organize") {
-          state.doOrganize = true;
-          state.doClean = false;
-        } else if (kind === "clean") {
-          state.doOrganize = false;
-          state.doClean = true;
-        } else {
-          state.doOrganize = true;
-          state.doClean = true;
+        if (kind === "clean") {
+          const ready = await runBusy("Escaneando basura…", async () => {
+            await withApi((api) => api.set_operation(kind));
+            state.doSearch = false;
+            state.doOrganize = false;
+            state.doClean = true;
+            state.orgMethod = null;
+            state.cleanItems = [];
+            return loadCleanPreview({ nested: true });
+          });
+          if (ready) go("clean_select");
+          else render({ animate: false });
+          return;
         }
+        await withApi((api) => api.set_operation(kind));
+        state.doSearch = kind === "search";
+        state.doOrganize = kind === "organize";
+        state.doClean = false;
         state.orgMethod = null;
+        state.cleanItems = [];
+        if (kind === "search") {
+          go("search_scope");
+          return;
+        }
         go("folder");
       });
     });
@@ -894,6 +1221,11 @@ export function createApp(root) {
         return;
       }
       if (ok === null) return;
+      if (state.doSearch) {
+        state.searchScope = "folder";
+        go("search_query");
+        return;
+      }
       state.useAi = false;
       await withApi((api) => api.set_use_ai(false));
       if (state.doOrganize) {
@@ -905,7 +1237,13 @@ export function createApp(root) {
     });
 
     root.querySelector('[data-action="apply"]')?.addEventListener("click", async () => {
-      const res = await withApi((api) => api.apply_plan());
+      const res = await runBusy("Aplicando cambios…", async () => {
+        if (state.doClean) {
+          const selected = state.cleanItems.filter((i) => i.selected).map((i) => i.path);
+          await withApi((api) => api.set_clean_selection(selected));
+        }
+        return withApi((api) => api.apply_plan());
+      });
       if (!res) return;
       if (res.ok === false) {
         state.error = res.error || "No se pudo aplicar";
@@ -943,7 +1281,7 @@ export function createApp(root) {
 
     root.querySelector('[data-action="undo-apply"]')?.addEventListener("click", async () => {
       const ts = state.undoTimestamp;
-      const res = await withApi((api) => api.apply_undo(ts || null));
+      const res = await withApi((api) => api.apply_undo(ts || null), { message: "Deshaciendo…" });
       if (!res || res.ok === false) {
         state.error = (res && res.error) || "No se pudo deshacer.";
         render({ animate: false });
@@ -966,7 +1304,10 @@ export function createApp(root) {
       await withApi((api) => api.reset_operation());
       state.useAi = false;
       state.orgMethod = null;
+      state.doSearch = false;
       state.preview = { moveCount: 0, trashCount: 0, tagCount: 0, groups: [], lines: [] };
+      state.cleanItems = [];
+      state.searchHits = [];
       state.expandedGroup = null;
       state.history = [];
       state.undoTimestamp = null;
@@ -976,20 +1317,24 @@ export function createApp(root) {
   }
 
   async function prepareAndPreview(method, granularity, terms) {
-    const res = await withApi((api) => api.set_organize_options(method, granularity, terms));
-    if (!res || res.ok === false) {
-      state.error = (res && res.error) || "No se pudo preparar el modo.";
-      render({ animate: false });
-      return;
-    }
-    state.useAi = false;
-    await withApi((api) => api.set_use_ai(false));
-    const ready = await loadPreview();
+    const ready = await runBusy("Preparando vista previa…", async () => {
+      const res = await withApi((api) => api.set_organize_options(method, granularity, terms));
+      if (!res || res.ok === false) {
+        state.error = (res && res.error) || "No se pudo preparar el modo.";
+        return false;
+      }
+      state.useAi = false;
+      await withApi((api) => api.set_use_ai(false));
+      return loadPreview({ nested: true });
+    });
     if (ready) go("preview");
+    else render({ animate: false });
   }
 
   async function openUndo(timestamp) {
-    const res = await withApi((api) => api.undo_preview(timestamp || null));
+    const res = await withApi((api) => api.undo_preview(timestamp || null), {
+      message: "Preparando deshacer…",
+    });
     if (!res || res.available === false) {
       state.error = "No hay una organización para deshacer.";
       state.canUndo = false;
@@ -1002,12 +1347,14 @@ export function createApp(root) {
     go("undo_confirm");
   }
 
-  async function loadPreview() {
-    const res = await withApi((api) => api.build_preview());
+  async function loadPreview({ nested = false } = {}) {
+    const res = nested
+      ? await withApi((api) => api.build_preview())
+      : await withApi((api) => api.build_preview(), { message: "Preparando vista previa…" });
     if (!res) return false;
     if (res.error) {
       state.error = res.error;
-      render({ animate: false });
+      if (!nested) render({ animate: false });
       return false;
     }
     state.preview = {
@@ -1021,10 +1368,35 @@ export function createApp(root) {
     return true;
   }
 
+  async function loadCleanPreview({ updating = false, nested = false } = {}) {
+    const res = nested
+      ? await withApi((api) => api.build_clean_preview(state.cleanSortBy, state.cleanSortReverse))
+      : await withApi(
+          (api) => api.build_clean_preview(state.cleanSortBy, state.cleanSortReverse),
+          { message: updating ? "Actualizando lista…" : "Escaneando basura…" }
+        );
+    if (!res) return false;
+    if (res.ok === false) {
+      state.error = res.error || "No se pudo escanear basura.";
+      render({ animate: false });
+      return false;
+    }
+    const previous = new Map(state.cleanItems.map((i) => [i.path, i.selected]));
+    state.cleanItems = (res.items || []).map((item) => ({
+      ...item,
+      selected: previous.has(item.path) ? previous.get(item.path) : item.selected !== false,
+    }));
+    state.cleanRoots = res.roots || [];
+    state.cleanTotalLabel = res.total_size_label || "";
+    return true;
+  }
+
   function render({ animate = false } = {}) {
-    root.innerHTML = renderSlide();
-    bind();
-    if (animate) {
+    root.innerHTML = `${renderSlide()}${busyOverlayHtml()}`;
+    if (!state.busy) {
+      bind();
+    }
+    if (animate && !state.busy) {
       const target = root.firstElementChild;
       if (target) {
         target.classList.remove("taxos-slide-enter");

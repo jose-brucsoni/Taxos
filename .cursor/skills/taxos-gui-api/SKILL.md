@@ -16,9 +16,11 @@ La UI (`ui/src/app.js`) solo llama a `window.pywebview.api`. Toda lógica de neg
 | `get_state` | Carpeta, tema, flags onboarding, clave Groq |
 | `set_theme` / `set_folder` / `browse_folder` | Preferencias y ruta |
 | `set_onboarding_flag` | Persistir `tutorial_seen` / `preview_tip_seen` / `undo_tip_seen` |
-| `set_operation` / `set_organize_options` / `set_use_ai` | Opciones del asistente |
-| `build_preview` | Plan de moves/trash/tags (sin mutar) |
-| `apply_plan` | Aplicar + historial |
+| `set_operation` / `set_organize_options` / `set_use_ai` | Opciones: `organize` / `clean` / `search` |
+| `build_preview` | Plan de moves/tags (sin mutar) |
+| `build_clean_preview` / `set_clean_selection` | Basura en temps/caché del usuario + selección |
+| `search_files` / `reveal_path` | Buscar por nombre/extensión; abrir carpeta |
+| `apply_plan` | Aplicar moves + papelera seleccionada + historial |
 | `undo_status` / `undo_preview` / `apply_undo` | Deshacer |
 | `reset_operation` / `close_app` | Ciclo de vida |
 

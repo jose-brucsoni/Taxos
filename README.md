@@ -64,12 +64,15 @@ taxos gui
 # → dist\Taxos-win64.zip  → súbelo a GitHub Releases
 ```
 
-**Linux** (CLI one-file):
+**Linux** (CLI one-file + AppImage GUI):
 
 ```bash
 ./scripts/build_linux.sh
 # → dist/taxos
+# → dist/Taxos-x86_64.AppImage  (requiere appimagetool en PATH)
 ```
+
+Instala [appimagetool](https://github.com/AppImage/appimagetool/releases) para generar el `.AppImage`. Sin él, el script deja listo `dist/Taxos.AppDir`.
 
 No empaquetes `.env` en el binario.
 

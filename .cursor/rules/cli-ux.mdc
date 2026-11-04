@@ -8,7 +8,7 @@ alwaysApply: false
 
 ## Comandos
 
-- `path`, `scan`, `organize`, `clean`, `undo`, `watch`, `gui`.
+- `path`, `scan`, `organize`, `clean`, `search`, `undo`, `watch`, `gui`.
 - Mutaciones: dry-run por defecto; apply real con `--apply` y confirmación.
 - Flag `--ai` solo envía nombres de archivo (requiere `GROQ_API_KEY`).
 

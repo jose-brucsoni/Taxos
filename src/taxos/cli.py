@@ -8,12 +8,13 @@ from rich.console import Console
 from rich.table import Table
 
 from taxos.classifier import classify_with_optional_ai
-from taxos.cleaner import apply_trash, find_candidates
+from taxos.cleaner import apply_trash, default_clean_roots, find_candidates, find_system_candidates
 from taxos.config import load_rules
 from taxos.history import append_organize_batch, append_trash, append_undos, last_reversible_batch
 from taxos.organizer import apply_plan, build_plan
 from taxos.paths import get_downloads_dir
 from taxos.scanner import scan_dir
+from taxos.search import search_files, user_search_root
 from taxos.undo import execute_undo, summarize_batch
 
 load_dotenv()
@@ -187,7 +188,7 @@ def clean(
         None,
         "--path",
         "-p",
-        help="Carpeta a limpiar (por defecto: Descargas).",
+        help="Carpeta concreta (si se omite: temps/caché del usuario).",
         exists=True,
         file_okay=False,
         dir_okay=True,
@@ -200,15 +201,19 @@ def clean(
         help="Enviar a papelera (por defecto solo dry-run).",
     ),
 ) -> None:
-    """Envía a papelera temporales, vacíos y locks seguros."""
-    target = path or get_downloads_dir()
-    if not target.is_dir():
-        console.print(f"[red]No existe la carpeta:[/red] {target}")
-        raise typer.Exit(code=1)
-
-    candidates = find_candidates(target)
+    """Envía a papelera basura conocida (temps/caché del usuario o --path)."""
     mode = "[green]APPLY[/green]" if apply else "[yellow]DRY-RUN[/yellow]"
-    console.print(f"[bold]Carpeta:[/bold] {target}  ({mode})")
+    if path is not None:
+        roots = [path]
+        candidates = find_candidates(path)
+        console.print(f"[bold]Carpeta:[/bold] {path}  ({mode})")
+        log_root = path
+    else:
+        roots = default_clean_roots()
+        candidates = find_system_candidates()
+        console.print(f"[bold]Raíces:[/bold] {', '.join(str(r) for r in roots) or '(ninguna)'}  ({mode})")
+        log_root = roots[0] if roots else Path.home()
+
     console.print(f"[bold]Candidatos:[/bold] {len(candidates)}")
 
     if not candidates:
@@ -216,11 +221,11 @@ def clean(
         return
 
     table = Table(title="Plan de limpieza")
-    table.add_column("Archivo")
+    table.add_column("Ruta")
     table.add_column("Motivo", style="cyan")
     table.add_column("Tamaño", justify="right")
     for candidate in candidates:
-        table.add_row(candidate.path.name, candidate.reason, _format_size(candidate.size))
+        table.add_row(candidate.relative_label(), candidate.reason, _format_size(candidate.size))
     console.print(table)
 
     if not apply:
@@ -232,7 +237,7 @@ def clean(
         raise typer.Exit(code=0)
 
     done = apply_trash(candidates)
-    log_path = append_trash(done, root=target)
+    log_path = append_trash(done, root=log_root)
     console.print(f"[green]A papelera:[/green] {len(done)} / {len(candidates)}")
     console.print(f"[bold]Log:[/bold] {log_path}")
 
@@ -327,6 +332,65 @@ def gui() -> None:
     except RuntimeError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
+
+
+@app.command("search")
+def search_cmd(
+    name: str = typer.Option(
+        "",
+        "--name",
+        "-n",
+        help="Texto que debe contener el nombre del archivo.",
+    ),
+    ext: str | None = typer.Option(
+        None,
+        "--ext",
+        "-e",
+        help="Extensión (con o sin punto), p. ej. pdf.",
+    ),
+    path: Path | None = typer.Option(
+        None,
+        "--path",
+        "-p",
+        help="Carpeta donde buscar.",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+    ),
+    all_user: bool = typer.Option(
+        False,
+        "--all-user",
+        help="Buscar en el perfil del usuario (toda la PC de usuario).",
+    ),
+    limit: int = typer.Option(500, "--limit", help="Máximo de resultados."),
+) -> None:
+    """Busca archivos por nombre y/o extensión (sin leer el contenido)."""
+    if all_user:
+        target = user_search_root()
+    else:
+        target = path or get_downloads_dir()
+    if not target.is_dir():
+        console.print(f"[red]No existe la carpeta:[/red] {target}")
+        raise typer.Exit(code=1)
+    if not (name or "").strip() and not ext:
+        console.print("[red]Indica --name y/o --ext.[/red]")
+        raise typer.Exit(code=1)
+
+    hits = search_files(target, name_query=name, extension=ext, limit=limit)
+    console.print(f"[bold]Raíz:[/bold] {target}")
+    console.print(f"[bold]Resultados:[/bold] {len(hits)}" + (" (límite)" if len(hits) >= limit else ""))
+    if not hits:
+        console.print("[yellow]Sin coincidencias.[/yellow]")
+        return
+    table = Table(title="Búsqueda")
+    table.add_column("Nombre")
+    table.add_column("Carpeta", style="cyan")
+    table.add_column("Tamaño", justify="right")
+    for hit in hits:
+        table.add_row(hit.name, str(hit.parent), _format_size(hit.size))
+    console.print(table)
 
 
 @app.command("watch")

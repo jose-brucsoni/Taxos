@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import webview
 
-from taxos.cleaner import TrashCandidate, apply_trash, find_candidates
+from taxos.cleaner import (
+    TrashCandidate,
+    apply_trash,
+    default_clean_roots,
+    find_system_candidates,
+    sort_candidates,
+)
 from taxos.config import load_rules
 from taxos.gui.prefs import ONBOARDING_FLAGS, load_gui_prefs, save_gui_prefs, update_gui_prefs
+from taxos.search import search_files as run_search
+from taxos.search import user_search_root
 from taxos.history import (
     append_organize_batch,
     append_trash,
@@ -93,7 +102,9 @@ class TaxosApi:
         self.request = OrganizeRequest()
         self.move_actions: list[MoveAction] = []
         self.trash_candidates: list[TrashCandidate] = []
+        self.selected_trash_paths: set[str] | None = None
         self.tag_mapping: dict[str, list[str]] = {}
+        self.do_search = False
 
     def get_state(self) -> dict[str, Any]:
         prefs = load_gui_prefs()
@@ -122,18 +133,22 @@ class TaxosApi:
         return {"ok": True, "name": name, "value": bool(prefs.get(name))}
 
     def set_operation(self, kind: str) -> dict[str, Any]:
+        self.do_search = False
+        self.selected_trash_paths = None
         if kind == "organize":
             self.do_organize, self.do_clean = True, False
         elif kind == "clean":
             self.do_organize, self.do_clean = False, True
-        elif kind == "both":
-            self.do_organize, self.do_clean = True, True
+        elif kind == "search":
+            self.do_organize, self.do_clean = False, False
+            self.do_search = True
         else:
             return {"ok": False, "error": "Operación desconocida."}
         return {
             "ok": True,
             "do_organize": self.do_organize,
             "do_clean": self.do_clean,
+            "do_search": self.do_search,
         }
 
     def set_folder(self, path: str) -> dict[str, Any]:
@@ -226,8 +241,8 @@ class TaxosApi:
                         "error": str(exc),
                     }
 
-        if self.do_clean:
-            self.trash_candidates = find_candidates(self.target)
+        # La basura se gestiona solo con build_clean_preview / clean_select.
+        self.trash_candidates = []
 
         groups: list[dict[str, Any]] = []
         folder_files: dict[str, list[dict[str, Any]]] = {}
@@ -294,28 +309,6 @@ class TaxosApi:
                     }
                 )
 
-        if self.trash_candidates:
-            trash_count = len(self.trash_candidates)
-            trash_size = sum(c.size for c in self.trash_candidates)
-            trash_files = [
-                {
-                    "name": c.path.name,
-                    "size_bytes": c.size,
-                    "size_label": _format_size(c.size),
-                }
-                for c in self.trash_candidates
-            ]
-            groups.append(
-                {
-                    "name": "Papelera",
-                    "kind": "trash",
-                    "count": trash_count,
-                    "size_bytes": trash_size,
-                    "size_label": _format_size(trash_size),
-                    "files": trash_files,
-                }
-            )
-
         lines: list[str] = []
         if self.do_organize:
             for action in self.move_actions[:50]:
@@ -331,29 +324,134 @@ class TaxosApi:
                     f"Etiquetas (sin mover): {len(self.tag_mapping)} archivo(s) "
                     f"en {TAGS_FILENAME}"
                 )
-        if self.do_clean:
-            if lines:
-                lines.append("")
-            for candidate in self.trash_candidates[:50]:
-                lines.append(f"{candidate.path.name} ({candidate.reason})")
-            if len(self.trash_candidates) > 50:
-                lines.append(f"… y {len(self.trash_candidates) - 50} más")
-
-        if not self.move_actions and not self.trash_candidates and not self.tag_mapping:
-            lines.append("Nada que hacer en esta carpeta con la operación elegida.")
+        if not self.move_actions and not self.tag_mapping:
+            lines.append("Nada que organizar en esta carpeta.")
 
         return {
             "move_count": len(self.move_actions),
-            "trash_count": len(self.trash_candidates),
+            "trash_count": 0,
             "tag_count": len(self.tag_mapping),
             "groups": groups,
             "lines": lines,
         }
 
+    def build_clean_preview(self, sort_by: str = "name", reverse: bool = False) -> dict[str, Any]:
+        roots = default_clean_roots()
+        self.trash_candidates = find_system_candidates()
+        ordered = sort_candidates(self.trash_candidates, sort_by, reverse=bool(reverse))
+        items: list[dict[str, Any]] = []
+        for candidate in ordered:
+            path_str = str(candidate.path)
+            selected = (
+                True
+                if self.selected_trash_paths is None
+                else path_str in self.selected_trash_paths
+            )
+            root_str = str(candidate.root) if candidate.root else ""
+            items.append(
+                {
+                    "path": path_str,
+                    "name": candidate.path.name,
+                    "rel_path": candidate.relative_label(),
+                    "root": root_str,
+                    "extension": candidate.extension,
+                    "size_bytes": candidate.size,
+                    "size_label": _format_size(candidate.size),
+                    "reason": candidate.reason,
+                    "selected": selected,
+                }
+            )
+        total_bytes = sum(c.size for c in ordered)
+        return {
+            "ok": True,
+            "items": items,
+            "count": len(items),
+            "sort_by": sort_by,
+            "reverse": bool(reverse),
+            "roots": [str(r) for r in roots],
+            "total_size_bytes": total_bytes,
+            "total_size_label": _format_size(total_bytes),
+        }
+
+    def set_clean_selection(self, paths: list[str] | None = None) -> dict[str, Any]:
+        if paths is None:
+            self.selected_trash_paths = None
+            return {"ok": True, "count": len(self.trash_candidates)}
+        wanted = {str(p) for p in paths}
+        self.selected_trash_paths = wanted
+        return {"ok": True, "count": len(wanted)}
+
+    def _selected_trash(self) -> list[TrashCandidate]:
+        if self.selected_trash_paths is None:
+            return list(self.trash_candidates)
+        return [c for c in self.trash_candidates if str(c.path) in self.selected_trash_paths]
+
+    def search_files(
+        self,
+        name: str = "",
+        extension: str = "",
+        scope: str = "folder",
+        limit: int = 500,
+    ) -> dict[str, Any]:
+        if scope == "all_user":
+            root = user_search_root()
+        else:
+            root = self.target
+        if not root.is_dir():
+            return {"ok": False, "error": f"No existe la carpeta:\n{root}", "hits": []}
+        if not (name or "").strip() and not (extension or "").strip():
+            return {
+                "ok": False,
+                "error": "Indica un texto de nombre y/o una extensión.",
+                "hits": [],
+            }
+        hits = run_search(
+            root,
+            name_query=name or "",
+            extension=extension or None,
+            limit=int(limit) or 500,
+        )
+        return {
+            "ok": True,
+            "root": str(root),
+            "truncated": len(hits) >= (int(limit) or 500),
+            "hits": [
+                {
+                    "path": str(hit.path),
+                    "name": hit.name,
+                    "extension": hit.extension,
+                    "parent": str(hit.parent),
+                    "size_bytes": hit.size,
+                    "size_label": _format_size(hit.size),
+                }
+                for hit in hits
+            ],
+        }
+
+    def reveal_path(self, path: str) -> dict[str, Any]:
+        target = Path(path)
+        folder = target if target.is_dir() else target.parent
+        if not folder.is_dir():
+            return {"ok": False, "error": "No se pudo abrir la carpeta."}
+        try:
+            import os
+            import subprocess
+
+            if sys.platform.startswith("win"):
+                os.startfile(str(folder))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(folder)])
+            else:
+                subprocess.Popen(["xdg-open", str(folder)])
+        except OSError as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "folder": str(folder)}
+
     def apply_plan(self) -> dict[str, Any]:
         if not self.do_organize and not self.do_clean:
             return {"ok": False, "error": "No hay operación seleccionada."}
-        if not self.move_actions and not self.trash_candidates and not self.tag_mapping:
+        trash_to_apply = self._selected_trash() if self.do_clean else []
+        if not self.move_actions and not trash_to_apply and not self.tag_mapping:
             return {"ok": False, "error": "No hay acciones en el plan."}
 
         moved = 0
@@ -382,15 +480,23 @@ class TaxosApi:
                 root=self.target,
                 method=self.request.method,
             )
-        if self.trash_candidates:
-            done_trash = apply_trash(self.trash_candidates)
-            append_trash(done_trash, root=self.target)
+        if trash_to_apply:
+            done_trash = apply_trash(trash_to_apply)
+            trash_root = (
+                trash_to_apply[0].root
+                if trash_to_apply[0].root is not None
+                else self.target
+            )
+            append_trash(done_trash, root=trash_root)
             trashed = len(done_trash)
 
-        parts = [f"Movidos: {moved}.", f"A papelera: {trashed}."]
-        if tagged:
-            parts.append(f"Etiquetados: {tagged}.")
-        parts.append("Puedes deshacer la organización desde el historial.")
+        if self.do_clean and not self.do_organize:
+            parts = [f"A papelera: {trashed}."]
+        else:
+            parts = [f"Movidos: {moved}.", f"A papelera: {trashed}."]
+            if tagged:
+                parts.append(f"Etiquetados: {tagged}.")
+            parts.append("Puedes deshacer la organización desde el historial.")
         batches = list_history_batches()
         return {
             "ok": True,
@@ -455,8 +561,10 @@ class TaxosApi:
     def reset_operation(self) -> dict[str, Any]:
         self.move_actions = []
         self.trash_candidates = []
+        self.selected_trash_paths = None
         self.tag_mapping = {}
         self.use_ai = False
+        self.do_search = False
         self.request = OrganizeRequest()
         return {"ok": True}
 

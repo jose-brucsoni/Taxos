@@ -40,7 +40,7 @@ Núcleo CLI primero; luego wizard GUI; IA opcional; al final instalable.
 
 ## Fase 6 — Distribución
 
-- [x] One-click: PyInstaller (Win + binario Linux; AppImage pendiente)
+- [x] One-click: PyInstaller (Win + binario Linux + AppImage vía `scripts/build_linux.sh`)
 - [x] `taxos watch`
 - [x] LICENSE (MIT); publicación GitHub documentada
 - [x] `Taxos.exe` Win64 GUI (`run_gui` + `scripts/build_windows.ps1` → Releases)

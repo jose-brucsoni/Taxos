@@ -44,6 +44,31 @@ body {
   animation: taxos-progress 1.2s ease-in-out infinite;
 }
 
+.taxos-busy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(255 255 255 / 0.92);
+  padding: 1.5rem;
+}
+
+.taxos-busy-panel {
+  width: 100%;
+  max-width: 28rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .taxos-busy-overlay .taxos-progress-bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.45;
+  }
+}
+
 .taxos-hero-img {
   max-height: min(42vh, 280px);
   width: auto;
@@ -114,6 +139,30 @@ body {
   background: rgb(250 250 249 / 0.9);
   padding: 0.85rem 1rem;
   text-align: left;
+}
+
+.taxos-clean-row:hover {
+  background: rgb(250 250 249 / 0.9);
+}
+
+.taxos-clean-explain {
+  border: 1px solid rgb(251 191 36 / 0.55);
+  background: rgb(254 243 199 / 0.85);
+  padding: 0.9rem 1rem;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 300;
+  line-height: 1.55;
+  color: rgb(68 64 60);
+}
+
+.taxos-clean-explain p + p {
+  margin-top: 0.4rem;
+}
+
+.taxos-clean-explain strong {
+  font-weight: 600;
+  color: rgb(41 37 36);
 }
 
 .taxos-welcome {
