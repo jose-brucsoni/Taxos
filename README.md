@@ -1,94 +1,73 @@
 # Taxos
 
-Organiza la carpeta Descargas en Windows y Linux: clasifica, mueve y limpia con preview antes de aplicar. La IA (opcional) solo ve nombres de archivo, nunca el contenido.
+<p align="center">
+  <img src="ui/public/illustrations/welcome.svg" alt="Taxos" width="280" />
+</p>
 
-Licencia: [MIT](LICENSE). Ilustraciones e iconos de terceros: [docs/CREDITOS.md](docs/CREDITOS.md).
+**Ordena tu carpeta Descargas** sin complicaciones.
 
-## Para usuarios (Windows)
+Taxos te muestra qué va a hacer **antes** de mover o borrar nada.  
+Si te arrepientes, puedes deshacer. Lo eliminado va a la **papelera**.
 
-No necesitas instalar Python.
+---
 
-1. **Ve a Releases en este repositorio.**
-2. Descarga `Taxos-win64.zip`.
+## Cómo empezar (Windows)
+
+No necesitas instalar nada más.
+
+1. Entra en **Releases** de este proyecto.
+2. Descarga **Taxos-win64.zip**.
 3. Descomprime la carpeta.
-4. Doble clic en `Taxos.exe` para abrir el asistente.
+4. Abre **Taxos.exe**.
 
-Si Windows SmartScreen avisa: *Más información* → *Ejecutar de todas formas*.  
-No hace falta (ni debes) meter un `.env` en esa carpeta para uso básico. Sin clave de IA se usan solo reglas locales.
+Si Windows avisa: *Más información* → *Ejecutar de todas formas*.
 
-## Para desarrolladores
+---
 
-### Stack
+## Qué puedes hacer
 
-- Python 3.11+, Typer, Rich, pathlib, platformdirs, send2trash, YAML, httpx, watchdog
-- GUI: PyWebView + Vite/Tailwind · IA: Groq (opt-in)
-- Windows GUI: WebView2 Runtime (suele venir con Microsoft Edge)
+- **Organizar** — separa archivos por tipo, fecha, nombre u otros modos.
+- **Eliminar** — propone basura segura (temps, caché…) y tú eliges qué va a la papelera.
+- **Buscar** — encuentra archivos sin revolver toda la carpeta.
 
-### Instalación
+---
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
-cp .env.example .env        # opcional: GROQ_API_KEY
+## Un vistazo
 
-# UI (Node 20+):
-cd ui && npm install && npm run build && cd ..
+<p align="center">
+  <img src="docs/images/01-inicio.png" alt="Pantalla de inicio de Taxos" width="640" />
+</p>
 
-taxos path
-taxos scan
-taxos organize              # dry-run
-taxos organize --apply
-taxos clean
-taxos undo
-taxos watch
-taxos gui
-```
+<p align="center"><em>Al abrir Taxos</em></p>
 
-Desarrollo de la UI con hot-reload:
+<p align="center">
+  <img src="docs/images/02-operaciones.png" alt="Elegir Organizar, Eliminar o Buscar" width="640" />
+</p>
 
-```bash
-cd ui && npm run dev
-# otra terminal:
-set TAXOS_UI_DEV=1          # PowerShell: $env:TAXOS_UI_DEV=1
-taxos gui
-```
+<p align="center"><em>Elige qué quieres hacer</em></p>
 
-### Generar ejecutables
+<p align="center">
+  <img src="docs/images/03-modos.png" alt="Modos de organización" width="640" />
+</p>
 
-**Windows 64-bit** (en un PC Windows; carpeta onedir; el script construye la UI con npm):
+<p align="center"><em>Elige cómo agrupar tus archivos</em></p>
 
-```powershell
-.\scripts\build_windows.ps1
-# → dist\Taxos\Taxos.exe
-# → dist\Taxos-win64.zip  → súbelo a GitHub Releases
-```
+<p align="center">
+  <img src="docs/images/04-vista-previa.png" alt="Vista previa del plan" width="640" />
+</p>
 
-**Linux** (CLI one-file + AppImage GUI):
+<p align="center"><em>Siempre ves el plan antes de confirmar</em></p>
 
-```bash
-./scripts/build_linux.sh
-# → dist/taxos
-# → dist/Taxos-x86_64.AppImage  (requiere appimagetool en PATH)
-```
+---
 
-Instala [appimagetool](https://github.com/AppImage/appimagetool/releases) para generar el `.AppImage`. Sin él, el script deja listo `dist/Taxos.AppDir`.
+## Tranquilidad
 
-No empaquetes `.env` en el binario.
+- Nada se aplica sin tu confirmación.
+- Lo borrado va a la papelera, no desaparece del todo.
+- La IA es opcional y solo mira **nombres** de archivo, nunca el contenido.
 
-## Publicar en GitHub
+---
 
-1. Crea un repositorio vacío y **público** (sin README).
-2. En este proyecto:
+¿Programas o usas Linux? → [docs/DESARROLLO.md](docs/DESARROLLO.md)
 
-```bash
-git remote add origin https://github.com/TU_USUARIO/Taxos.git
-git branch -M main
-git push -u origin main
-```
-
-Luego, en Windows: `.\scripts\build_windows.ps1` y sube `dist\Taxos-win64.zip` en **Releases**.
-
-## Guía
-
-Fases en [docs/ROADMAP.md](docs/ROADMAP.md).
+Licencia [MIT](LICENSE) · [Créditos de ilustraciones](docs/CREDITOS.md)
